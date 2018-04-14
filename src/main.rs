@@ -1,4 +1,5 @@
 use std::fmt;
+use std::mem::size_of;
 use std::time::{Instant};
 
 #[derive(Clone, Copy)]
@@ -88,6 +89,8 @@ fn main() {
     let wz = world.z;
     let mut data = Data::create(world);
 
+    println!("Grid size: {:?}x{:?}x{:?}", wx, wy, wz);
+    println!("Grid mem size: {:?} Mb", (size_of::<f64>() as i32 * wx * wy * wz) as f32 / 1000.0 / 1000.0);
     // Init World
     for x in 0..wx {
         for y in 0..wy {
@@ -97,7 +100,9 @@ fn main() {
         }
     }
     let mut frame_start = Instant::now();
-    for _i in 0..100 {
+    let mut timer = Instant::now();
+    let iterations = 100;
+    for _i in 0..iterations {
         /*
         println!("");
         for y in 0..wy {
@@ -155,12 +160,18 @@ fn main() {
 
         data = new_data;
 
+        /*
         let duration = frame_start.elapsed();
         let fps = NANOS_PER_SECOND / ((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64);
         println!("{:?}", fps);
         frame_start = Instant::now();
-
+        */
     }
+    let duration = timer.elapsed();
+    let fps = NANOS_PER_SECOND / (((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64) / iterations);
+    println!("Avg. FPS: {:?}", fps);
+
+
 
     /*
     println!("");
