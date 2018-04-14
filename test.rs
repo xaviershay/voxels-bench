@@ -1,5 +1,6 @@
 use std::cmp;
 use std::fmt;
+use std::time::{Duration,Instant};
 
 #[derive(Clone, Copy)]
 struct V3I {
@@ -76,8 +77,17 @@ impl Data {
     }
 }
 
+const H_NEIGHBOURS: [V3I; 4] = [
+    V3I { x: -1, y: 0, z: 0},
+    V3I { x: 1, y: 0, z: 0},
+    V3I { x: 0, y: 0, z: -1},
+    V3I { x: 0, y: 0, z: 1},
+];
+
+const NANOS_PER_SECOND: u64 = 1000000000;
+
 fn main() {
-    let world = V3I { x: 4, y: 1, z: 4};
+    let world = V3I { x: 50, y: 50, z: 50};
     let wx = world.x;
     let wy = world.y;
     let wz = world.z;
@@ -93,7 +103,8 @@ fn main() {
             }
         }
     }
-    for _i in 0..10000 {
+    let mut frameStart = Instant::now();
+    for _i in 0..1000 {
         /*
         println!("");
         for y in 0..wy {
@@ -112,14 +123,8 @@ fn main() {
             for y in 0..wy {
                 for z in 0..wz {
                     let cell = data.get_unsafe(x, y, z);
-                    let h_neighbours = [
-                        V3I::create(-1, 0, 0),
-                        V3I::create(1, 0, 0),
-                        V3I::create(0, 0, -1),
-                        V3I::create(0, 0, 1),
-                    ];
 
-                    let neighbours = h_neighbours.iter()
+                    let neighbours = H_NEIGHBOURS.iter()
                         .map(|delta| { data.get_relative(x, y, z, *delta) });
 
                     let mut sum = cell;
@@ -133,7 +138,7 @@ fn main() {
 
                     let mut remaining = cell;
 
-                    for delta in h_neighbours.iter() {
+                    for delta in H_NEIGHBOURS.iter() {
                         match data.get_relative(x, y, z, *delta) {
                             Some(n) => {
                                 // 0.3, 0.4, 0.3
@@ -155,6 +160,10 @@ fn main() {
             }
         }
         data = new_data;
+        let duration = frameStart.elapsed();
+        let fps = NANOS_PER_SECOND / ((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64);
+        println!("{:?}", fps);
+        frameStart = Instant::now();
     }
 
     println!("");
