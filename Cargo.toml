@@ -1,0 +1,7 @@
+[package]
+name = "voxel-bench"
+version = "0.1.0"
+authors = ["Xavier"]
+
+# [dependencies]
+# flame = "0.2.2"

@@ -1,6 +1,5 @@
-use std::cmp;
 use std::fmt;
-use std::time::{Duration,Instant};
+use std::time::{Instant};
 
 #[derive(Clone, Copy)]
 struct V3I {
@@ -10,10 +9,6 @@ struct V3I {
 }
 
 impl V3I {
-    fn create(x: i32, y: i32, z: i32) -> Self {
-        V3I { x: x, y: y, z: z }
-    }
-
     fn zero() -> Self {
         V3I { x: 0, y: 0, z: 0 }
     }
@@ -87,24 +82,22 @@ const H_NEIGHBOURS: [V3I; 4] = [
 const NANOS_PER_SECOND: u64 = 1000000000;
 
 fn main() {
-    let world = V3I { x: 50, y: 50, z: 50};
+    let world = V3I { x: 100, y: 50, z: 100};
     let wx = world.x;
     let wy = world.y;
     let wz = world.z;
     let mut data = Data::create(world);
 
     // Init World
-    let mut n = 0.0;
     for x in 0..wx {
         for y in 0..wy {
             for z in 0..wz {
                 data.set(x, y, z, x as f32);
-                n += 1.0;
             }
         }
     }
-    let mut frameStart = Instant::now();
-    for _i in 0..1000 {
+    let mut frame_start = Instant::now();
+    for _i in 0..100 {
         /*
         println!("");
         for y in 0..wy {
@@ -159,13 +152,17 @@ fn main() {
                 }
             }
         }
+
         data = new_data;
-        let duration = frameStart.elapsed();
+
+        let duration = frame_start.elapsed();
         let fps = NANOS_PER_SECOND / ((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64);
         println!("{:?}", fps);
-        frameStart = Instant::now();
+        frame_start = Instant::now();
+
     }
 
+    /*
     println!("");
     for y in 0..wy {
         for x in 0..wx {
@@ -175,4 +172,5 @@ fn main() {
             println!("");
         }
     }
+    */
 }
