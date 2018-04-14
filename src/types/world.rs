@@ -4,13 +4,15 @@ use types::*;
 pub struct World {
     size: V3I,
     cells: Vec<Cell>,
+    pub physics_fps: u64,
 }
 
 impl Clone for World {
     fn clone(&self) -> Self {
         World {
             size: self.size,
-            cells: self.cells.clone()
+            cells: self.cells.clone(),
+            physics_fps: self.physics_fps,
         }
     }
 }
@@ -18,7 +20,7 @@ impl Clone for World {
 impl World {
     pub fn create(world: V3I) -> Self {
         let data = vec![Cell::empty(); (world.x * world.y * world.z) as usize];
-        World { size: world, cells: data }
+        World { size: world, cells: data, physics_fps: 0 }
     }
 
     pub fn get(&self, v: V3I) -> Option<&Cell> {
