@@ -125,16 +125,20 @@ fn main() {
     let wz = world.z;
     let mut data = Data::create(world);
 
+    let locations =
+        (0..wx).flat_map(|x| {
+            (0..wy).flat_map(move |y| {
+                (0..wz).map (move |z| {
+                    V3I::create(x, y, z)
+                })
+            })
+        }).collect::<Vec<_>>();
+
     println!("Grid size: {:?}x{:?}x{:?}", wx, wy, wz);
     println!("Grid mem size: {:?} Mb", (size_of::<Cell>() as i32 * wx * wy * wz) as f32 / 1000.0 / 1000.0);
     // Init World
-    for x in 0..wx {
-        for y in 0..wy {
-            for z in 0..wz {
-                let location = V3I::create(x, y, z);
-                data.update(location, |c| c.volume = x as f32);
-            }
-        }
+    for &location in locations.iter() {
+        data.update(location, |c| c.volume = location.x as f32);
     }
     let mut frame_start = Instant::now();
     let mut timer = Instant::now();
@@ -156,47 +160,41 @@ fn main() {
         let old_data = data;
         let mut new_data = old_data.clone();
 
-        for x in 0..wx {
-            for y in 0..wy {
-                for z in 0..wz {
-                    let location = V3I::create(x, y, z);
+        for &location in locations.iter() {
+            let cell = old_data.get_unsafe(location);
 
-                    let cell = old_data.get_unsafe(location);
+            let mut sum = cell.volume;
+            let mut total = 1.0;
 
-                    let mut sum = cell.volume;
-                    let mut total = 1.0;
+            for delta in H_NEIGHBOURS.iter() {
+                let nl = location + *delta;
 
-                    for delta in H_NEIGHBOURS.iter() {
-                        let nl = location + *delta;
-
-                        for n in old_data.get(nl) {
-                            sum += n.volume;
-                            total += 1.0;
-                        }
-                    }
-
-                    let target_volume = sum / total;
-
-                    let mut remaining = cell.volume;
-
-                    // Doing a second loop here, with the "double fetching" of (nl, n) is actually
-                    // faster than precomputing. Probably because pre-computing ends up allocating
-                    // extra memory [citation needed]. Given that H_NEIGHBOURS is a fixed-size
-                    // array, there's likely a way to make it work without extra allocations...
-                    for delta in H_NEIGHBOURS.iter() {
-                        let nl = location + *delta;
-
-                        for n in old_data.get(nl) {
-                            let flow = (target_volume - n.volume).max(0.0).min(remaining);
-
-                            new_data.update(nl, |current| current.volume += flow);
-
-                            remaining -= flow;
-                        }
-                    }
-                    new_data.update(location, |current| current.volume += remaining - cell.volume);
+                for n in old_data.get(nl) {
+                    sum += n.volume;
+                    total += 1.0;
                 }
             }
+
+            let target_volume = sum / total;
+
+            let mut remaining = cell.volume;
+
+            // Doing a second loop here, with the "double fetching" of (nl, n) is actually
+            // faster than precomputing. Probably because pre-computing ends up allocating
+            // extra memory [citation needed]. Given that H_NEIGHBOURS is a fixed-size
+            // array, there's likely a way to make it work without extra allocations...
+            for delta in H_NEIGHBOURS.iter() {
+                let nl = location + *delta;
+
+                for n in old_data.get(nl) {
+                    let flow = (target_volume - n.volume).max(0.0).min(remaining);
+
+                    new_data.update(nl, |current| current.volume += flow);
+
+                    remaining -= flow;
+                }
+            }
+            new_data.update(location, |current| current.volume += remaining - cell.volume);
         }
 
         data = new_data;
@@ -217,7 +215,9 @@ fn main() {
     for y in 0..wy {
         for x in 0..wx {
             for z in 0..wz {
-                print!("{:?} ", data.get_unsafe(x, y, z));
+                let location = V3I::create(x, y, z);
+
+                print!("{:?} ", data.get_unsafe(location));
             }
             println!("");
         }
