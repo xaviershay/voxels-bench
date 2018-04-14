@@ -39,8 +39,8 @@ impl World {
         return &self.cells[(v.x*size.y*size.z + v.y*size.z + v.z) as usize];
     }
 
-    pub fn update<F>(&mut self, v: V3I, f: F)
-        where F: Fn(&mut Cell) {
+    pub fn update<F>(&mut self, v: V3I, mut f: F)
+        where F: FnMut(&mut Cell) {
 
         let size = &self.size;
 

@@ -1,7 +1,10 @@
+extern crate rand;
+
 use std::mem::size_of;
 use std::time::{Duration, Instant};
 use std::sync::{Arc,RwLock,mpsc};
 use std::thread;
+use rand::{Rng,thread_rng};
 
 mod types;
 
@@ -17,8 +20,8 @@ const H_NEIGHBOURS: [V3I; 4] = [
 const NANOS_PER_SECOND: u64 = 1000000000;
 
 fn main() {
-    let world = V3I { x: 100, y: 100, z: 100};
-    //let world = V3I { x: 2, y: 1, z: 2};
+    //let world = V3I { x: 100, y: 100, z: 100};
+    let world = V3I { x: 20, y: 1, z: 20};
     //let world = V3I { x: 20, y: 1, z: 20};
     let wx = world.x;
     let wy = world.y;
@@ -37,20 +40,38 @@ fn main() {
     // Init World
     {
         let mut value = data.write().unwrap();
+        let mut rng = thread_rng();
 
         for &location in locations.iter() {
-            value.update(location, |c| c.volume = location.x as f32);
+            value.update(location, |c| {
+                let a: f32 = rng.gen();
+                c.volume = if a < 0.5 {
+                    1.0
+                } else {
+                    0.0
+                }
+            });
         }
     }
 
     let physics_data = Arc::clone(&data);
     let (physics_tx, physics_rx) = mpsc::channel();
     let physics_thread = thread::spawn(move || {
+        let max_flow_per_sec = 1.0;
+        let mut delta_time = 0.0;
+
         loop {
             match physics_rx.try_recv() {
                 Ok(_) => break,
                 _ => {},
             }
+
+            let max_flow = if delta_time > 0.0 {
+                max_flow_per_sec * delta_time
+            } else {
+                // Default max flow of 30FPS
+                max_flow_per_sec * (1.0 / 30.0)
+            };
 
             let frame_start = Instant::now();
 
@@ -87,7 +108,7 @@ fn main() {
                         let nl = location + *delta;
 
                         for n in old_data.get(nl) {
-                            let flow = (target_volume - n.volume).max(0.0).min(remaining);
+                            let flow = (target_volume - n.volume).max(0.0).min(remaining).min(max_flow);
 
                             new_data.update(nl, |current| current.volume += flow);
 
@@ -97,11 +118,11 @@ fn main() {
                     new_data.update(location, |current| current.volume += remaining - cell.volume);
                 }
                 let duration = frame_start.elapsed();
+                delta_time = duration.as_secs() as f32 + (duration.subsec_nanos() as f32 / NANOS_PER_SECOND as f32);
                 let fps = NANOS_PER_SECOND / ((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64);
                 new_data.physics_fps = fps;
                 new_data
             };
-
 
             {
                 let mut d = physics_data.write().unwrap();
