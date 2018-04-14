@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Add;
 use std::mem::size_of;
 use std::time::{Instant};
 
@@ -10,8 +11,19 @@ struct V3I {
 }
 
 impl V3I {
+    fn create(x: i32, y: i32, z: i32) -> Self {
+        V3I { x: x, y: y, z: z }
+    }
     fn zero() -> Self {
-        V3I { x: 0, y: 0, z: 0 }
+        V3I::create(0, 0, 0)
+    }
+}
+
+impl Add for V3I {
+    type Output = V3I;
+
+    fn add(self, other: V3I) -> V3I {
+        V3I::create(self.x + other.x, self.y + other.y, self.z + other.z)
     }
 }
 
@@ -63,45 +75,32 @@ impl Data {
         Data { size: world, cells: data }
     }
 
-    fn get(&self, x: i32, y: i32, z: i32) -> Option<&Cell> {
+    fn getv(&self, v: V3I) -> Option<&Cell> {
         let size = &self.size;
 
-        if x < size.x && y < size.y && z < size.z && x >= 0 && y >= 0 && z >= 0 {
-            return Some(self.get_unsafe(x, y, z));
+        if v.x < size.x && v.y < size.y && v.z < size.z && v.x >= 0 && v.y >= 0 && v.z >= 0 {
+            return Some(self.get_unsafev(v));
         } else {
             return None;
         }
     }
 
-    fn get_relative(&self, x: i32, y: i32, z: i32, delta: V3I) -> Option<&Cell> {
-        self.get(x + delta.x, y + delta.y, z + delta.z)
-    }
-
-    fn get_unsafe(&self, x: i32, y: i32, z: i32) -> &Cell {
+    fn get_unsafev(&self, v: V3I) -> &Cell {
         let size = &self.size;
 
-        return &self.cells[(x*size.y*size.z + y*size.z + z) as usize];
+        return &self.cells[(v.x*size.y*size.z + v.y*size.z + v.z) as usize];
     }
 
-    fn set(&mut self, x: i32, y: i32, z: i32, value: Cell) {
-        let size = &self.size;
-        self.cells[(x*size.y*size.z + y*size.z + z) as usize] = value;
-    }
-
-    fn update_relative(&mut self, x: i32, y: i32, z: i32, delta: V3I, change: f32) {
-        let mut current = self.get_unsafe(x + delta.x, y + delta.y, z + delta.z).clone();
-        current.volume += change;
-        self.set(x + delta.x, y + delta.y, z + delta.z, current);
-    }
-
-    fn update<F>(&mut self, x: i32, y: i32, z: i32, f: F)
+    fn updatev<F>(&mut self, v: V3I, f: F)
         where F: Fn(&mut Cell) {
 
         let size = &self.size;
 
-        let ref mut current = &mut self.cells[(x*size.y*size.z + y*size.z + z) as usize];
+        if v.x < size.x && v.y < size.y && v.z < size.z && v.x >= 0 && v.y >= 0 && v.z >= 0 {
+            let ref mut current = &mut self.cells[(v.x*size.y*size.z + v.y*size.z + v.z) as usize];
 
-        f(current);
+            f(current);
+        }
     }
 }
 
@@ -119,8 +118,8 @@ fn test_update(c: &mut Cell) {
 }
 
 fn main() {
-    //let world = V3I { x: 100, y: 50, z: 100};
-    let world = V3I { x: 2, y: 1, z: 2};
+    let world = V3I { x: 100, y: 50, z: 100};
+    //let world = V3I { x: 2, y: 1, z: 2};
     let wx = world.x;
     let wy = world.y;
     let wz = world.z;
@@ -132,22 +131,21 @@ fn main() {
     for x in 0..wx {
         for y in 0..wy {
             for z in 0..wz {
-                let mut new_cell = Cell::empty();
-                new_cell.volume = x as f32;
-                data.set(x, y, z, new_cell);
+                let location = V3I::create(x, y, z);
+                data.updatev(location, |c| c.volume = x as f32);
             }
         }
     }
     let mut frame_start = Instant::now();
     let mut timer = Instant::now();
-    let iterations = 100;
+    let iterations = 50;
     for _i in 0..iterations {
         /*
         println!("");
         for y in 0..wy {
             for x in 0..wx {
                 for z in 0..wz {
-                    print!("{} ", data.get_unsafe(x, y, z));
+                    print!("{} ", data.get_unsafev(x, y, z));
                 }
                 println!("");
             }
@@ -161,10 +159,12 @@ fn main() {
         for x in 0..wx {
             for y in 0..wy {
                 for z in 0..wz {
-                    let cell = old_data.get_unsafe(x, y, z);
+                    let location = V3I::create(x, y, z);
+
+                    let cell = old_data.get_unsafev(location);
 
                     let neighbours = H_NEIGHBOURS.iter()
-                        .map(|delta| { old_data.get_relative(x, y, z, *delta) });
+                        .map(|delta| { old_data.getv(location + *delta) });
 
                     let mut sum = cell.volume;
                     let mut total = 1.0;
@@ -178,18 +178,16 @@ fn main() {
                     let mut remaining = cell.volume;
 
                     for delta in H_NEIGHBOURS.iter() {
-                        let nx = x + delta.x;
-                        let ny = y + delta.y;
-                        let nz = z + delta.z;
+                        let nl = location + *delta;
 
-                        match old_data.get(nx, ny, nz) {
+                        match old_data.getv(nl) {
                             Some(n) => {
                                 // 0.3, 0.4, 0.3
                                 //println!("{}, {}, {}", n, target_volume, remaining);
                                 let flow = (target_volume - n.volume).max(0.0).min(remaining);
                                 //println!("flow to {:?}: {:?}", delta, flow);
 
-                                new_data.update(x+delta.x, y+delta.y, z+delta.y, |current| current.volume += flow);
+                                new_data.updatev(nl, |current| current.volume += flow);
 
                                 remaining -= flow;
                             },
@@ -199,7 +197,7 @@ fn main() {
                     // Should be an update?
                     //println!("updating cell: {:?}", remaining - cell);
                     //new_data.update_relative(x, y, z, V3I::zero(), remaining - cell.volume);
-                    new_data.update(x, y, z, |current| current.volume += remaining - cell.volume);
+                    new_data.updatev(location, |current| current.volume += remaining - cell.volume);
                 }
             }
         }
@@ -217,6 +215,7 @@ fn main() {
     let fps = NANOS_PER_SECOND / (((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64) / iterations);
     println!("Avg. FPS: {:?}", fps);
 
+    /*
     println!("");
     for y in 0..wy {
         for x in 0..wx {
@@ -226,4 +225,5 @@ fn main() {
             println!("");
         }
     }
+    */
 }
