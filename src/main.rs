@@ -17,7 +17,7 @@ const H_NEIGHBOURS: [V3I; 4] = [
 const NANOS_PER_SECOND: u64 = 1000000000;
 
 fn main() {
-    let world = V3I { x: 100, y: 50, z: 100};
+    let world = V3I { x: 100, y: 100, z: 100};
     //let world = V3I { x: 2, y: 1, z: 2};
     //let world = V3I { x: 20, y: 1, z: 20};
     let wx = world.x;
