@@ -75,23 +75,23 @@ impl Data {
         Data { size: world, cells: data }
     }
 
-    fn getv(&self, v: V3I) -> Option<&Cell> {
+    fn get(&self, v: V3I) -> Option<&Cell> {
         let size = &self.size;
 
         if v.x < size.x && v.y < size.y && v.z < size.z && v.x >= 0 && v.y >= 0 && v.z >= 0 {
-            return Some(self.get_unsafev(v));
+            return Some(self.get_unsafe(v));
         } else {
             return None;
         }
     }
 
-    fn get_unsafev(&self, v: V3I) -> &Cell {
+    fn get_unsafe(&self, v: V3I) -> &Cell {
         let size = &self.size;
 
         return &self.cells[(v.x*size.y*size.z + v.y*size.z + v.z) as usize];
     }
 
-    fn updatev<F>(&mut self, v: V3I, f: F)
+    fn update<F>(&mut self, v: V3I, f: F)
         where F: Fn(&mut Cell) {
 
         let size = &self.size;
@@ -132,7 +132,7 @@ fn main() {
         for y in 0..wy {
             for z in 0..wz {
                 let location = V3I::create(x, y, z);
-                data.updatev(location, |c| c.volume = x as f32);
+                data.update(location, |c| c.volume = x as f32);
             }
         }
     }
@@ -145,7 +145,7 @@ fn main() {
         for y in 0..wy {
             for x in 0..wx {
                 for z in -1..wz {
-                    print!("{} ", data.get_unsafev(x, y, z));
+                    print!("{} ", data.get_unsafe(x, y, z));
                 }
                 println!("");
             }
@@ -161,7 +161,7 @@ fn main() {
                 for z in 0..wz {
                     let location = V3I::create(x, y, z);
 
-                    let cell = old_data.get_unsafev(location);
+                    let cell = old_data.get_unsafe(location);
 
                     let mut sum = cell.volume;
                     let mut total = 1.0;
@@ -169,7 +169,7 @@ fn main() {
                     for delta in H_NEIGHBOURS.iter() {
                         let nl = location + *delta;
 
-                        for n in old_data.getv(nl) {
+                        for n in old_data.get(nl) {
                             sum += n.volume;
                             total += 1.0;
                         }
@@ -186,15 +186,15 @@ fn main() {
                     for delta in H_NEIGHBOURS.iter() {
                         let nl = location + *delta;
 
-                        for n in old_data.getv(nl) {
+                        for n in old_data.get(nl) {
                             let flow = (target_volume - n.volume).max(0.0).min(remaining);
 
-                            new_data.updatev(nl, |current| current.volume += flow);
+                            new_data.update(nl, |current| current.volume += flow);
 
                             remaining -= flow;
                         }
                     }
-                    new_data.updatev(location, |current| current.volume += remaining - cell.volume);
+                    new_data.update(location, |current| current.volume += remaining - cell.volume);
                 }
             }
         }
