@@ -4,7 +4,7 @@ use types::*;
 pub struct World {
     size: V3I,
     cells: Vec<Cell>,
-    pub physics_fps: u64,
+    pub physics_fps: f32,
 }
 
 impl Clone for World {
@@ -20,7 +20,7 @@ impl Clone for World {
 impl World {
     pub fn create(world: V3I) -> Self {
         let data = vec![Cell::empty(); (world.x * world.y * world.z) as usize];
-        World { size: world, cells: data, physics_fps: 0 }
+        World { size: world, cells: data, physics_fps: 0.0 }
     }
 
     pub fn get(&self, v: V3I) -> Option<&Cell> {

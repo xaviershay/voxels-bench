@@ -119,7 +119,7 @@ fn main() {
                 }
                 let duration = frame_start.elapsed();
                 delta_time = duration.as_secs() as f32 + (duration.subsec_nanos() as f32 / NANOS_PER_SECOND as f32);
-                let fps = NANOS_PER_SECOND / ((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64);
+                let fps = 1.0 / delta_time;
                 new_data.physics_fps = fps;
                 new_data
             };
