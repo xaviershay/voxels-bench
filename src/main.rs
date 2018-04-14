@@ -21,10 +21,31 @@ impl fmt::Debug for V3I {
     }
 }
 
+#[derive(Clone)]
+struct Cell {
+    cell_type: usize,
+    volume: f32,
+}
+
+impl Cell {
+    fn empty() -> Self {
+        Cell {
+            cell_type: 0,
+            volume: 0.0,
+        }
+    }
+}
+
+impl fmt::Debug for Cell {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.volume)
+    }
+}
+
 #[derive(Debug)]
 struct Data {
     size: V3I,
-    cells: Vec<f32>,
+    cells: Vec<Cell>,
 }
 
 impl Clone for Data {
@@ -38,11 +59,11 @@ impl Clone for Data {
 
 impl Data {
     fn create(world: V3I) -> Self {
-        let data = vec![0.0; (world.x * world.y * world.z) as usize];
+        let data = vec![Cell::empty(); (world.x * world.y * world.z) as usize];
         Data { size: world, cells: data }
     }
 
-    fn get(&self, x: i32, y: i32, z: i32) -> Option<f32> {
+    fn get(&self, x: i32, y: i32, z: i32) -> Option<&Cell> {
         let size = &self.size;
 
         if x < size.x && y < size.y && z < size.z && x >= 0 && y >= 0 && z >= 0 {
@@ -52,24 +73,35 @@ impl Data {
         }
     }
 
-    fn get_relative(&self, x: i32, y: i32, z: i32, delta: V3I) -> Option<f32> {
+    fn get_relative(&self, x: i32, y: i32, z: i32, delta: V3I) -> Option<&Cell> {
         self.get(x + delta.x, y + delta.y, z + delta.z)
     }
 
-    fn get_unsafe(&self, x: i32, y: i32, z: i32) -> f32 {
+    fn get_unsafe(&self, x: i32, y: i32, z: i32) -> &Cell {
         let size = &self.size;
 
-        return self.cells[(x*size.y*size.z + y*size.z + z) as usize];
+        return &self.cells[(x*size.y*size.z + y*size.z + z) as usize];
     }
 
-    fn set(&mut self, x: i32, y: i32, z: i32, value: f32) {
+    fn set(&mut self, x: i32, y: i32, z: i32, value: Cell) {
         let size = &self.size;
         self.cells[(x*size.y*size.z + y*size.z + z) as usize] = value;
     }
 
     fn update_relative(&mut self, x: i32, y: i32, z: i32, delta: V3I, change: f32) {
-        let current = self.get_unsafe(x + delta.x, y + delta.y, z + delta.z);
-        self.set(x + delta.x, y + delta.y, z + delta.z, current + change);
+        let mut current = self.get_unsafe(x + delta.x, y + delta.y, z + delta.z).clone();
+        current.volume += change;
+        self.set(x + delta.x, y + delta.y, z + delta.z, current);
+    }
+
+    fn update<F>(&mut self, x: i32, y: i32, z: i32, f: F)
+        where F: Fn(&mut Cell) {
+
+        let size = &self.size;
+
+        let ref mut current = &mut self.cells[(x*size.y*size.z + y*size.z + z) as usize];
+
+        f(current);
     }
 }
 
@@ -82,20 +114,27 @@ const H_NEIGHBOURS: [V3I; 4] = [
 
 const NANOS_PER_SECOND: u64 = 1000000000;
 
+fn test_update(c: &mut Cell) {
+    c.volume += 0.3;
+}
+
 fn main() {
-    let world = V3I { x: 100, y: 50, z: 100};
+    //let world = V3I { x: 100, y: 50, z: 100};
+    let world = V3I { x: 2, y: 1, z: 2};
     let wx = world.x;
     let wy = world.y;
     let wz = world.z;
     let mut data = Data::create(world);
 
     println!("Grid size: {:?}x{:?}x{:?}", wx, wy, wz);
-    println!("Grid mem size: {:?} Mb", (size_of::<f64>() as i32 * wx * wy * wz) as f32 / 1000.0 / 1000.0);
+    println!("Grid mem size: {:?} Mb", (size_of::<Cell>() as i32 * wx * wy * wz) as f32 / 1000.0 / 1000.0);
     // Init World
     for x in 0..wx {
         for y in 0..wy {
             for z in 0..wz {
-                data.set(x, y, z, x as f32);
+                let mut new_cell = Cell::empty();
+                new_cell.volume = x as f32;
+                data.set(x, y, z, new_cell);
             }
         }
     }
@@ -115,36 +154,42 @@ fn main() {
         }
         */
 
-        let mut new_data = data.clone();
+        // Move to a non-mutable binding to enforce that it isn't changed.
+        let old_data = data;
+        let mut new_data = old_data.clone();
 
         for x in 0..wx {
             for y in 0..wy {
                 for z in 0..wz {
-                    let cell = data.get_unsafe(x, y, z);
+                    let cell = old_data.get_unsafe(x, y, z);
 
                     let neighbours = H_NEIGHBOURS.iter()
-                        .map(|delta| { data.get_relative(x, y, z, *delta) });
+                        .map(|delta| { old_data.get_relative(x, y, z, *delta) });
 
-                    let mut sum = cell;
+                    let mut sum = cell.volume;
                     let mut total = 1.0;
                     for n in neighbours.into_iter().filter_map(|x| { x }) {
-                        sum += n;
+                        sum += n.volume;
                         total += 1.0;
                     }
                     let target_volume = sum / total;
                     //println!("neighbours: {:?}", neighbours);
 
-                    let mut remaining = cell;
+                    let mut remaining = cell.volume;
 
                     for delta in H_NEIGHBOURS.iter() {
-                        match data.get_relative(x, y, z, *delta) {
+                        let nx = x + delta.x;
+                        let ny = y + delta.y;
+                        let nz = z + delta.z;
+
+                        match old_data.get(nx, ny, nz) {
                             Some(n) => {
                                 // 0.3, 0.4, 0.3
                                 //println!("{}, {}, {}", n, target_volume, remaining);
-                                let flow = (target_volume - n).max(0.0).min(remaining);
+                                let flow = (target_volume - n.volume).max(0.0).min(remaining);
                                 //println!("flow to {:?}: {:?}", delta, flow);
 
-                                new_data.update_relative(x, y, z, *delta, flow);
+                                new_data.update(x+delta.x, y+delta.y, z+delta.y, |current| current.volume += flow);
 
                                 remaining -= flow;
                             },
@@ -153,7 +198,8 @@ fn main() {
                     }
                     // Should be an update?
                     //println!("updating cell: {:?}", remaining - cell);
-                    new_data.update_relative(x, y, z, V3I::zero(), remaining - cell);
+                    //new_data.update_relative(x, y, z, V3I::zero(), remaining - cell.volume);
+                    new_data.update(x, y, z, |current| current.volume += remaining - cell.volume);
                 }
             }
         }
@@ -171,17 +217,13 @@ fn main() {
     let fps = NANOS_PER_SECOND / (((duration.as_secs() * NANOS_PER_SECOND) + duration.subsec_nanos() as u64) / iterations);
     println!("Avg. FPS: {:?}", fps);
 
-
-
-    /*
     println!("");
     for y in 0..wy {
         for x in 0..wx {
             for z in 0..wz {
-                print!("{} ", data.get_unsafe(x, y, z));
+                print!("{:?} ", data.get_unsafe(x, y, z));
             }
             println!("");
         }
     }
-    */
 }
