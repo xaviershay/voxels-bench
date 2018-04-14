@@ -144,7 +144,7 @@ fn main() {
         println!("");
         for y in 0..wy {
             for x in 0..wx {
-                for z in 0..wz {
+                for z in -1..wz {
                     print!("{} ", data.get_unsafev(x, y, z));
                 }
                 println!("");
@@ -163,40 +163,37 @@ fn main() {
 
                     let cell = old_data.get_unsafev(location);
 
-                    let neighbours = H_NEIGHBOURS.iter()
-                        .map(|delta| { old_data.getv(location + *delta) });
-
                     let mut sum = cell.volume;
                     let mut total = 1.0;
-                    for n in neighbours.into_iter().filter_map(|x| { x }) {
-                        sum += n.volume;
-                        total += 1.0;
-                    }
-                    let target_volume = sum / total;
-                    //println!("neighbours: {:?}", neighbours);
-
-                    let mut remaining = cell.volume;
 
                     for delta in H_NEIGHBOURS.iter() {
                         let nl = location + *delta;
 
-                        match old_data.getv(nl) {
-                            Some(n) => {
-                                // 0.3, 0.4, 0.3
-                                //println!("{}, {}, {}", n, target_volume, remaining);
-                                let flow = (target_volume - n.volume).max(0.0).min(remaining);
-                                //println!("flow to {:?}: {:?}", delta, flow);
-
-                                new_data.updatev(nl, |current| current.volume += flow);
-
-                                remaining -= flow;
-                            },
-                            _ => {}
+                        for n in old_data.getv(nl) {
+                            sum += n.volume;
+                            total += 1.0;
                         }
                     }
-                    // Should be an update?
-                    //println!("updating cell: {:?}", remaining - cell);
-                    //new_data.update_relative(x, y, z, V3I::zero(), remaining - cell.volume);
+
+                    let target_volume = sum / total;
+
+                    let mut remaining = cell.volume;
+
+                    // Doing a second loop here, with the "double fetching" of (nl, n) is actually
+                    // faster than precomputing. Probably because pre-computing ends up allocating
+                    // extra memory [citation needed]. Given that H_NEIGHBOURS is a fixed-size
+                    // array, there's likely a way to make it work without extra allocations...
+                    for delta in H_NEIGHBOURS.iter() {
+                        let nl = location + *delta;
+
+                        for n in old_data.getv(nl) {
+                            let flow = (target_volume - n.volume).max(0.0).min(remaining);
+
+                            new_data.updatev(nl, |current| current.volume += flow);
+
+                            remaining -= flow;
+                        }
+                    }
                     new_data.updatev(location, |current| current.volume += remaining - cell.volume);
                 }
             }
