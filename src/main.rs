@@ -48,6 +48,8 @@ fn main() {
     use gfx::{Primitive,ShaderSet};
     use gfx::state::Rasterizer;
     use gfx::texture::PackedColor;
+    use gfx::buffer::Role;
+    use gfx::memory::Bind;
 
     let opengl = OpenGL::V3_3;
 
@@ -183,16 +185,45 @@ fn main() {
         gfx::texture::WrapMode::Clamp);
     //sinfo.border = PackedColor::from([0.0, 0.0, 0.0, 0.5]);
 
+    let sampler = factory.create_sampler(sinfo);
     let mut data = pipe::Data {
             vbuf: vbuf.clone(),
             u_model_view_proj: [[0.0; 4]; 4],
-            t_data: (texture_view, factory.create_sampler(sinfo)),
+            t_data: (texture_view, sampler),
             world_size: [2, 3, 1],
             out_color: window.output_color.clone(),
             out_depth: window.output_stencil.clone(),
     };
 
+    let mut t: u8 = 0;
+    let mut frame_count = 0;
+    let mut frame_start = Instant::now();
     while let Some(e) = window.next() {
+        if (frame_start.elapsed().as_secs() >= 1) {
+            println!("{}", frame_count);
+            frame_count = 0;
+            frame_start = Instant::now();
+        }
+        frame_count += 1;
+        if t < 255 {
+            t += 1;    
+        } else {
+            t = 0;
+        }
+        let texels = [
+            [0x00, 0x00, 0x00, t],
+            [0x00, 0x00, 0x00, t],
+            [0x00, 0x00, 0x00, t],
+            [0x00, 0x00, 0x00, t],
+            [0x00, 0x00, 0x00, t],
+            [0x00, 0x00, 0x00, t],
+        ];
+        let sampler = factory.create_sampler(sinfo);
+        let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
+            gfx::texture::Kind::D3(2, 3, 1),
+            gfx::texture::Mipmap::Provided,
+    &[&texels]).unwrap();
+        data.t_data = (texture_view, sampler);
         window.draw_3d(&e, |window| {
             let args = e.render_args().unwrap();
 
