@@ -1,4 +1,8 @@
 extern crate rand;
+#[macro_use]
+extern crate gfx;
+extern crate piston_window;
+extern crate shader_version;
 
 use std::mem::size_of;
 use std::time::{Duration, Instant};
@@ -10,6 +14,112 @@ mod types;
 
 use types::*;
 
+gfx_vertex_struct!( Vertex {
+    a_pos: [i8; 4] = "a_pos",
+    a_tex_coord: [i8; 2] = "a_tex_coord",
+});
+
+impl Vertex {
+    fn new(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
+        Vertex {
+            a_pos: [pos[0], pos[1], pos[2], 1],
+            a_tex_coord: tc,
+        }
+    }
+}
+
+gfx_pipeline!( pipe {
+    vbuf: gfx::VertexBuffer<Vertex> = (),
+    u_model_view_proj: gfx::Global<[[f32; 4]; 4]> = "u_model_view_proj",
+    //t_color: gfx::TextureSampler<[f32; 4]> = "t_color",
+    out_color: gfx::RenderTarget<::gfx::format::Srgba8> = "FragColor",
+    out_depth: gfx::DepthTarget<::gfx::format::DepthStencil> =
+        gfx::preset::depth::LESS_EQUAL_WRITE,
+});
+
+fn main() {
+    use piston_window::*;
+    use gfx::traits::*;
+    use shader_version::Shaders;
+    use shader_version::glsl::GLSL;
+
+    let opengl = OpenGL::V3_3;
+
+    let mut window: PistonWindow =
+        WindowSettings::new("piston: cube", [640, 480])
+        .exit_on_esc(true)
+        .samples(4)
+        .opengl(opengl)
+        .build()
+        .unwrap();
+
+    let ref mut factory = window.factory.clone();
+
+    let vertex_data = vec![
+        Vertex::new([-1, -1, 1], [0, 0]),
+        Vertex::new([1, -1, 1], [1, 0]),
+        Vertex::new([1, 1, 1], [1, 1]),
+        Vertex::new([-1, 1, 1], [0, 1]),
+    ];
+    let index_data: &[u16] = &[
+        0, 1, 2, 2, 3, 0,
+    ];
+    let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, index_data);
+
+    let vertex_shader = r#"
+    #version 330 core
+    layout (location = 0) in ivec3 a_pos;
+
+    void main()
+    {
+        gl_Position = vec4(a_pos.x*0.3, a_pos.y*0.3, a_pos.z*0.3, 1.0);
+    }
+    "#;
+    let fragment_shader = r#"
+    #version 330 core
+    out vec4 FragColor;
+
+    void main()
+    {
+        FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+    } 
+    "#;
+    let glsl = opengl.to_glsl();
+    let pso = factory.create_pipeline_simple(
+        Shaders::new()
+          .set(GLSL::V3_30, vertex_shader)
+          .get(glsl).unwrap().as_bytes(),
+        Shaders::new()
+          .set(GLSL::V3_30, fragment_shader)
+          .get(glsl).unwrap().as_bytes(),
+        pipe::new()
+    ).unwrap();
+
+    let mut data = pipe::Data {
+            vbuf: vbuf.clone(),
+            u_model_view_proj: [[0.0; 4]; 4],
+            out_color: window.output_color.clone(),
+            out_depth: window.output_stencil.clone(),
+    };
+
+    while let Some(e) = window.next() {
+        window.draw_3d(&e, |window| {
+            let args = e.render_args().unwrap();
+
+            window.encoder.clear(&window.output_color, [0.3, 0.3, 0.3, 1.0]);
+            window.encoder.clear_depth(&window.output_stencil, 1.0);
+
+            window.encoder.draw(&slice, &pso, &data);
+        });
+
+        if let Some(_) = e.resize_args() {
+            data.out_color = window.output_color.clone();
+            data.out_depth = window.output_stencil.clone();
+        }
+
+    }
+}
+
 const H_NEIGHBOURS: [V3I; 4] = [
     V3I { x: -1, y: 0, z: 0},
     V3I { x: 1, y: 0, z: 0},
@@ -19,7 +129,7 @@ const H_NEIGHBOURS: [V3I; 4] = [
 
 const NANOS_PER_SECOND: u64 = 1000000000;
 
-fn main() {
+fn main2() {
     //let world = V3I { x: 100, y: 100, z: 100};
     let world = V3I { x: 20, y: 1, z: 20};
     //let world = V3I { x: 20, y: 1, z: 20};
