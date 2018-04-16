@@ -14,10 +14,21 @@ mod types;
 
 use types::*;
 
-gfx_vertex_struct!( Vertex {
-    a_pos: [i8; 4] = "a_pos",
-    a_tex_coord: [i8; 2] = "a_tex_coord",
-});
+gfx_defines!{
+    vertex Vertex {
+        a_pos: [i8; 4] = "a_pos",
+        a_tex_coord: [i8; 2] = "a_tex_coord",
+    }
+
+    pipeline pipe {
+        vbuf: gfx::VertexBuffer<Vertex> = (),
+        u_model_view_proj: gfx::Global<[[f32; 4]; 4]> = "u_model_view_proj",
+        //t_color: gfx::TextureSampler<[f32; 4]> = "t_color",
+        out_color: gfx::RenderTarget<::gfx::format::Srgba8> = "FragColor",
+        out_depth: gfx::DepthTarget<::gfx::format::DepthStencil> =
+            gfx::preset::depth::LESS_EQUAL_WRITE,
+    }
+}
 
 impl Vertex {
     fn new(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
@@ -28,20 +39,13 @@ impl Vertex {
     }
 }
 
-gfx_pipeline!( pipe {
-    vbuf: gfx::VertexBuffer<Vertex> = (),
-    u_model_view_proj: gfx::Global<[[f32; 4]; 4]> = "u_model_view_proj",
-    //t_color: gfx::TextureSampler<[f32; 4]> = "t_color",
-    out_color: gfx::RenderTarget<::gfx::format::Srgba8> = "FragColor",
-    out_depth: gfx::DepthTarget<::gfx::format::DepthStencil> =
-        gfx::preset::depth::LESS_EQUAL_WRITE,
-});
-
 fn main() {
     use piston_window::*;
     use gfx::traits::*;
     use shader_version::Shaders;
     use shader_version::glsl::GLSL;
+    use gfx::{Primitive,ShaderSet};
+    use gfx::state::Rasterizer;
 
     let opengl = OpenGL::V3_3;
 
@@ -84,14 +88,15 @@ fn main() {
         FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
     } 
     "#;
-    let glsl = opengl.to_glsl();
-    let pso = factory.create_pipeline_simple(
-        Shaders::new()
-          .set(GLSL::V3_30, vertex_shader)
-          .get(glsl).unwrap().as_bytes(),
-        Shaders::new()
-          .set(GLSL::V3_30, fragment_shader)
-          .get(glsl).unwrap().as_bytes(),
+    let vs = factory.create_shader_vertex(vertex_shader.as_bytes()).expect("Failed to compile vertex shader");
+    let fs = factory.create_shader_pixel(fragment_shader.as_bytes()).expect("Failed to compile fragment shader");
+    let ss = ShaderSet::Simple(vs, fs);
+
+    //let glsl = opengl.to_glsl();
+    let pso = factory.create_pipeline_state(
+        &ss,
+        Primitive::TriangleList,
+        Rasterizer::new_fill(),
         pipe::new()
     ).unwrap();
 
@@ -116,7 +121,6 @@ fn main() {
             data.out_color = window.output_color.clone();
             data.out_depth = window.output_stencil.clone();
         }
-
     }
 }
 
