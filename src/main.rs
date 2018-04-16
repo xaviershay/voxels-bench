@@ -160,6 +160,10 @@ fn main() {
         pipe::new()
     ).unwrap();
 
+    // Store height in alpha channel of RGBA8. Bit weird, but keeping like this
+    // because will want to pass through other data as well, and also not clear
+    // how to just include a single float - looks like no matter what the
+    // geometry shader is going to want to interpret as RGBA.
     let texels = [
         [0x00, 0x00, 0x00, 0x00],
         [0x00, 0x00, 0x00, 0xff],
