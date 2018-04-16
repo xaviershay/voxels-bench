@@ -79,6 +79,21 @@ fn main() {
         gl_Position = vec4(a_pos.x*0.3, a_pos.y*0.3, a_pos.z*0.3, 1.0);
     }
     "#;
+    let geometry_shader = r#"
+    #version 330 core
+    layout (points) in;
+    layout (line_strip, max_vertices = 2) out;
+
+    void main() {
+        gl_Position = gl_in[0].gl_Position + vec4(-0.1, 0.0, 0.0, 0.0);
+        EmitVertex();
+
+        gl_Position = gl_in[0].gl_Position + vec4(0.1, 0.0, 0.0, 0.0);
+        EmitVertex();
+
+        EndPrimitive();
+    }
+    "#;
     let fragment_shader = r#"
     #version 330 core
     out vec4 FragColor;
@@ -89,13 +104,14 @@ fn main() {
     } 
     "#;
     let vs = factory.create_shader_vertex(vertex_shader.as_bytes()).expect("Failed to compile vertex shader");
+    let gs = factory.create_shader_geometry(geometry_shader.as_bytes()).expect("Failed to compile geometry shader");
     let fs = factory.create_shader_pixel(fragment_shader.as_bytes()).expect("Failed to compile fragment shader");
-    let ss = ShaderSet::Simple(vs, fs);
+    let ss = ShaderSet::Geometry(vs, gs, fs);
 
     //let glsl = opengl.to_glsl();
     let pso = factory.create_pipeline_state(
         &ss,
-        Primitive::TriangleList,
+        Primitive::PointList,
         Rasterizer::new_fill(),
         pipe::new()
     ).unwrap();
