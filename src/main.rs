@@ -23,7 +23,8 @@ gfx_defines!{
     pipeline pipe {
         vbuf: gfx::VertexBuffer<Vertex> = (),
         u_model_view_proj: gfx::Global<[[f32; 4]; 4]> = "u_model_view_proj",
-        //t_color: gfx::TextureSampler<[f32; 4]> = "t_color",
+        t_data: gfx::TextureSampler<[f32; 4]> = "t_data",
+        world_size: gfx::Global<[i32; 3]> = "world_size",
         out_color: gfx::RenderTarget<::gfx::format::Srgba8> = "FragColor",
         out_depth: gfx::DepthTarget<::gfx::format::DepthStencil> =
             gfx::preset::depth::LESS_EQUAL_WRITE,
@@ -46,6 +47,7 @@ fn main() {
     use shader_version::glsl::GLSL;
     use gfx::{Primitive,ShaderSet};
     use gfx::state::Rasterizer;
+    use gfx::texture::PackedColor;
 
     let opengl = OpenGL::V3_3;
 
@@ -60,13 +62,23 @@ fn main() {
     let ref mut factory = window.factory.clone();
 
     let vertex_data = vec![
+        Vertex::new([0, 0, 0], [0, 0]),
+        Vertex::new([0, 1, 0], [1, 0]),
+        Vertex::new([1, 1, 0], [1, 1]),
+        Vertex::new([1, 0, 0], [0, 1]),
+        Vertex::new([0, 2, 0], [1, 0]),
+        Vertex::new([1, 2, 0], [1, 1]),
+    ];
+    /*
+    let vertex_data = vec![
         Vertex::new([-1, -1, 1], [0, 0]),
         Vertex::new([1, -1, 1], [1, 0]),
         Vertex::new([1, 1, 1], [1, 1]),
         Vertex::new([-1, 1, 1], [0, 1]),
     ];
+    */
     let index_data: &[u16] = &[
-        0, 1, 2, 2, 3, 0,
+        0, 1, 2, 3, 4, 5
     ];
     let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, index_data);
 
@@ -74,21 +86,53 @@ fn main() {
     #version 330 core
     layout (location = 0) in ivec3 a_pos;
 
+    out VS_OUT {
+        ivec3 a_pos;
+    } vs_out;
+
     void main()
     {
-        gl_Position = vec4(a_pos.x*0.3, a_pos.y*0.3, a_pos.z*0.3, 1.0);
+        gl_Position = vec4(a_pos.x*0.3-0.3, a_pos.y*0.5-0.3, a_pos.z*0.5-0.3, 1.0);
+        vs_out.a_pos = a_pos;
     }
     "#;
     let geometry_shader = r#"
     #version 330 core
     layout (points) in;
-    layout (line_strip, max_vertices = 2) out;
+    layout (line_strip, max_vertices = 5) out;
+
+    in VS_OUT {
+        ivec3 a_pos;
+    } gs_in[];
+
+    uniform sampler3D t_data;
+    uniform ivec3 world_size;
 
     void main() {
-        gl_Position = gl_in[0].gl_Position + vec4(-0.1, 0.0, 0.0, 0.0);
+        vec4 pos = gl_in[0].gl_Position;
+        ivec3 gridPos = gs_in[0].a_pos;
+        float radius = 0.1;
+        float height = texture(t_data,
+            vec3(
+                gridPos.x / (world_size.x - 1),
+                gridPos.y / (world_size.y - 1),
+                gridPos.z / (world_size.z - 1)
+            )
+        ).w;
+
+        gl_Position = pos + vec4(-radius, -radius, 0.0, 0.0);
         EmitVertex();
 
-        gl_Position = gl_in[0].gl_Position + vec4(0.1, 0.0, 0.0, 0.0);
+        gl_Position = pos + vec4(radius, -radius, 0.0, 0.0);
+        EmitVertex();
+
+        gl_Position = pos + vec4(radius, -radius + (height * 2 * radius), 0.0, 0.0);
+        EmitVertex();
+
+        gl_Position = pos + vec4(-radius, -radius + (height * 2 * radius), 0.0, 0.0);
+        EmitVertex();
+
+        gl_Position = pos + vec4(-radius, -radius, 0.0, 0.0);
         EmitVertex();
 
         EndPrimitive();
@@ -116,9 +160,30 @@ fn main() {
         pipe::new()
     ).unwrap();
 
+    let texels = [
+        [0x00, 0x00, 0x00, 0x00],
+        [0x00, 0x00, 0x00, 0xff],
+        [0x00, 0x00, 0x00, 0xff],
+        [0x00, 0x00, 0x00, 0xaa],
+        [0x00, 0x00, 0x00, 0xff],
+        [0x00, 0x00, 0x00, 0xaa],
+    ];
+
+    let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
+        gfx::texture::Kind::D3(2, 3, 1),
+        gfx::texture::Mipmap::Provided,
+&[&texels]).unwrap();
+
+    let mut sinfo = gfx::texture::SamplerInfo::new(
+        gfx::texture::FilterMethod::Scale,
+        gfx::texture::WrapMode::Clamp);
+    //sinfo.border = PackedColor::from([0.0, 0.0, 0.0, 0.5]);
+
     let mut data = pipe::Data {
             vbuf: vbuf.clone(),
             u_model_view_proj: [[0.0; 4]; 4],
+            t_data: (texture_view, factory.create_sampler(sinfo)),
+            world_size: [2, 3, 1],
             out_color: window.output_color.clone(),
             out_depth: window.output_stencil.clone(),
     };
