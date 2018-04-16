@@ -14,6 +14,15 @@ mod types;
 
 use types::*;
 
+const H_NEIGHBOURS: [V3I; 4] = [
+    V3I { x: -1, y: 0, z: 0},
+    V3I { x: 1, y: 0, z: 0},
+    V3I { x: 0, y: 0, z: -1},
+    V3I { x: 0, y: 0, z: 1},
+];
+
+const NANOS_PER_SECOND: u64 = 1000000000;
+
 gfx_defines!{
     vertex Vertex {
         a_pos: [i8; 4] = "a_pos",
@@ -50,6 +59,22 @@ fn main() {
     use gfx::texture::PackedColor;
     use gfx::buffer::Role;
     use gfx::memory::Bind;
+    use gfx::Slice;
+
+    let world = V3I { x: 3, y: 1, z: 3};
+    let wx = world.x;
+    let wy = world.y;
+    let wz = world.z;
+    let data = Arc::new(RwLock::new(World::create(world)));
+
+    let locations =
+        (0..wx).flat_map(|x| {
+            (0..wy).flat_map(move |y| {
+                (0..wz).map (move |z| {
+                    V3I::create(x, y, z)
+                })
+            })
+        }).collect::<Vec<_>>();
 
     let opengl = OpenGL::V3_3;
 
@@ -62,7 +87,12 @@ fn main() {
         .unwrap();
 
     let ref mut factory = window.factory.clone();
+    let mut vertex_data = vec![Vertex::new([0,0,0], [0,0]); locations.len()];
+    for l in &locations {
+        vertex_data.push(Vertex::new([l.x as i8,l.z as i8,l.y as i8], [0,0]));
+    }
 
+/*
     let vertex_data = vec![
         Vertex::new([0, 0, 0], [0, 0]),
         Vertex::new([0, 1, 0], [1, 0]),
@@ -71,6 +101,7 @@ fn main() {
         Vertex::new([0, 2, 0], [1, 0]),
         Vertex::new([1, 2, 0], [1, 1]),
     ];
+    */
     /*
     let vertex_data = vec![
         Vertex::new([-1, -1, 1], [0, 0]),
@@ -79,10 +110,8 @@ fn main() {
         Vertex::new([-1, 1, 1], [0, 1]),
     ];
     */
-    let index_data: &[u16] = &[
-        0, 1, 2, 3, 4, 5
-    ];
-    let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, index_data);
+    let vbuf = factory.create_vertex_buffer(&vertex_data);
+    let slice = Slice::new_match_vertex_buffer(&vbuf);
 
     let vertex_shader = r#"
     #version 330 core
@@ -166,17 +195,10 @@ fn main() {
     // because will want to pass through other data as well, and also not clear
     // how to just include a single float - looks like no matter what the
     // geometry shader is going to want to interpret as RGBA.
-    let texels = [
-        [0x00, 0x00, 0x00, 0x00],
-        [0x00, 0x00, 0x00, 0xff],
-        [0x00, 0x00, 0x00, 0xff],
-        [0x00, 0x00, 0x00, 0xaa],
-        [0x00, 0x00, 0x00, 0xff],
-        [0x00, 0x00, 0x00, 0xaa],
-    ];
+    let texels = vec![ [0x00, 0x00, 0x00, 0x11]; locations.len()];
 
     let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
-        gfx::texture::Kind::D3(2, 3, 1),
+        gfx::texture::Kind::D3(wx as u16, wz as u16, wy as u16),
         gfx::texture::Mipmap::Provided,
 &[&texels]).unwrap();
 
@@ -186,11 +208,11 @@ fn main() {
     //sinfo.border = PackedColor::from([0.0, 0.0, 0.0, 0.5]);
 
     let sampler = factory.create_sampler(sinfo);
-    let mut data = pipe::Data {
+    let mut gfx_data = pipe::Data {
             vbuf: vbuf.clone(),
             u_model_view_proj: [[0.0; 4]; 4],
             t_data: (texture_view, sampler),
-            world_size: [2, 3, 1],
+            world_size: [wx, wz, wy],
             out_color: window.output_color.clone(),
             out_depth: window.output_stencil.clone(),
     };
@@ -198,74 +220,7 @@ fn main() {
     let mut t: u8 = 0;
     let mut frame_count = 0;
     let mut frame_start = Instant::now();
-    while let Some(e) = window.next() {
-        if (frame_start.elapsed().as_secs() >= 1) {
-            println!("{}", frame_count);
-            frame_count = 0;
-            frame_start = Instant::now();
-        }
-        frame_count += 1;
-        if t < 255 {
-            t += 1;    
-        } else {
-            t = 0;
-        }
-        let texels = [
-            [0x00, 0x00, 0x00, t],
-            [0x00, 0x00, 0x00, t],
-            [0x00, 0x00, 0x00, t],
-            [0x00, 0x00, 0x00, t],
-            [0x00, 0x00, 0x00, t],
-            [0x00, 0x00, 0x00, t],
-        ];
-        let sampler = factory.create_sampler(sinfo);
-        let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
-            gfx::texture::Kind::D3(2, 3, 1),
-            gfx::texture::Mipmap::Provided,
-    &[&texels]).unwrap();
-        data.t_data = (texture_view, sampler);
-        window.draw_3d(&e, |window| {
-            let args = e.render_args().unwrap();
-
-            window.encoder.clear(&window.output_color, [0.3, 0.3, 0.3, 1.0]);
-            window.encoder.clear_depth(&window.output_stencil, 1.0);
-
-            window.encoder.draw(&slice, &pso, &data);
-        });
-
-        if let Some(_) = e.resize_args() {
-            data.out_color = window.output_color.clone();
-            data.out_depth = window.output_stencil.clone();
-        }
-    }
-}
-
-const H_NEIGHBOURS: [V3I; 4] = [
-    V3I { x: -1, y: 0, z: 0},
-    V3I { x: 1, y: 0, z: 0},
-    V3I { x: 0, y: 0, z: -1},
-    V3I { x: 0, y: 0, z: 1},
-];
-
-const NANOS_PER_SECOND: u64 = 1000000000;
-
-fn main2() {
     //let world = V3I { x: 100, y: 100, z: 100};
-    let world = V3I { x: 20, y: 1, z: 20};
-    //let world = V3I { x: 20, y: 1, z: 20};
-    let wx = world.x;
-    let wy = world.y;
-    let wz = world.z;
-    let data = Arc::new(RwLock::new(World::create(world)));
-
-    let locations =
-        (0..wx).flat_map(|x| {
-            (0..wy).flat_map(move |y| {
-                (0..wz).map (move |z| {
-                    V3I::create(x, y, z)
-                })
-            })
-        }).collect::<Vec<_>>();
 
     // Init World
     {
@@ -287,6 +242,14 @@ fn main2() {
     let physics_data = Arc::clone(&data);
     let (physics_tx, physics_rx) = mpsc::channel();
     let physics_thread = thread::spawn(move || {
+        let locations =
+            (0..wx).flat_map(|x| {
+                (0..wy).flat_map(move |y| {
+                    (0..wz).map (move |z| {
+                        V3I::create(x, y, z)
+                    })
+                })
+        }).collect::<Vec<_>>();
         let max_flow_per_sec = 1.0;
         let mut delta_time = 0.0;
 
@@ -299,8 +262,8 @@ fn main2() {
             let max_flow = if delta_time > 0.0 {
                 max_flow_per_sec * delta_time
             } else {
-                // Default max flow of 30FPS
-                max_flow_per_sec * (1.0 / 30.0)
+                // First iteration won't do anything. We need a delta for correct calculations.
+                0.0
             };
 
             let frame_start = Instant::now();
@@ -361,6 +324,7 @@ fn main2() {
         }
     });
 
+/*
     loop {
         thread::sleep(Duration::from_millis(300));
         let d = data.read().unwrap();
@@ -381,6 +345,46 @@ fn main2() {
              (size_of::<Cell>() as i32 * wx * wy * wz) as f32 / 1000.0 / 1000.0);
         println!("Physics FPS: {}", d.physics_fps);
     }
+    */
+    while let Some(e) = window.next() {
+        if (frame_start.elapsed().as_secs() >= 1) {
+            println!("{}", frame_count);
+            frame_count = 0;
+            frame_start = Instant::now();
+        }
+        frame_count += 1;
+        if t < 255 {
+            t += 1;    
+        } else {
+            t = 0;
+        }
+        let mut texels2 = Vec::with_capacity(locations.len());
+        let d = data.read().unwrap();
+        for location in &locations {
+            texels2.push([0, 0, 0, (d.get_unsafe(*location).volume * 255.0) as u8]);
+        }
+        let sampler = factory.create_sampler(sinfo);
+        // TODO: What about a mutable texture? Is that a thing?
+        let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
+            gfx::texture::Kind::D3(wx as u16, wz as u16, wy as u16),
+            gfx::texture::Mipmap::Provided,
+            &[&texels2]).unwrap();
+        gfx_data.t_data = (texture_view, sampler);
+        window.draw_3d(&e, |window| {
+            let args = e.render_args().unwrap();
+
+            window.encoder.clear(&window.output_color, [0.3, 0.3, 0.3, 1.0]);
+            window.encoder.clear_depth(&window.output_stencil, 1.0);
+
+            window.encoder.draw(&slice, &pso, &gfx_data);
+        });
+
+        if let Some(_) = e.resize_args() {
+            gfx_data.out_color = window.output_color.clone();
+            gfx_data.out_depth = window.output_stencil.clone();
+        }
+    }
+
     physics_tx.send(true).unwrap();
     physics_thread.join().unwrap();
 }
