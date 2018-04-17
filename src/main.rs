@@ -1,3 +1,5 @@
+#![feature(fs_read_write)]
+
 extern crate rand;
 #[macro_use]
 extern crate gfx;
@@ -10,7 +12,26 @@ use std::mem::size_of;
 use std::time::{Duration, Instant};
 use std::sync::{Arc,RwLock,mpsc};
 use std::thread;
+use std::fs;
 use rand::{Rng,thread_rng};
+
+use piston_window::*;
+use gfx::traits::*;
+use shader_version::Shaders;
+use shader_version::glsl::GLSL;
+use gfx::{Primitive,ShaderSet};
+use gfx::state::Rasterizer;
+use gfx::texture::PackedColor;
+use gfx::buffer::Role;
+use gfx::memory::Bind;
+use gfx::Slice;
+use gfx::Device;
+use camera_controllers::{
+    FirstPersonSettings,
+    FirstPerson,
+    CameraPerspective,
+    model_view_projection
+};
 
 mod types;
 
@@ -51,23 +72,20 @@ impl Vertex {
     }
 }
 
+fn create_shader_set<R: gfx::Resources, D: Factory<R>>(factory: &mut D) -> ShaderSet<R> {
+    let cwd = std::env::current_dir().unwrap();
+
+    let vertex_shader = fs::read(cwd.join("assets/voxels.glslv")).unwrap();
+    let geometry_shader = fs::read(cwd.join("assets/voxels.glslg")).unwrap();
+    let fragment_shader = fs::read(cwd.join("assets/voxels.glslf")).unwrap();
+
+    let vs = factory.create_shader_vertex(&vertex_shader).expect("Failed to compile vertex shader");
+    let gs = factory.create_shader_geometry(&geometry_shader).expect("Failed to compile geometry shader");
+    let fs = factory.create_shader_pixel(&fragment_shader).expect("Failed to compile fragment shader");
+
+    ShaderSet::Geometry(vs, gs, fs)
+}
 fn main() {
-    use piston_window::*;
-    use gfx::traits::*;
-    use shader_version::Shaders;
-    use shader_version::glsl::GLSL;
-    use gfx::{Primitive,ShaderSet};
-    use gfx::state::Rasterizer;
-    use gfx::texture::PackedColor;
-    use gfx::buffer::Role;
-    use gfx::memory::Bind;
-    use gfx::Slice;
-    use camera_controllers::{
-        FirstPersonSettings,
-        FirstPerson,
-        CameraPerspective,
-        model_view_projection
-    };
 
     let world = V3I { x: 3, y: 2, z: 3};
     let wx = world.x;
@@ -103,23 +121,7 @@ fn main() {
     let vbuf = factory.create_vertex_buffer(&vertex_data);
     let slice = Slice::new_match_vertex_buffer(&vbuf);
 
-    let vertex_shader = include_str!("../assets/voxels.glslv");
-    let geometry_shader = include_str!("../assets/voxels.glslg");
-    let fragment_shader = include_str!("../assets/voxels.glslf");
-
-    let vs = factory.create_shader_vertex(vertex_shader.as_bytes()).expect("Failed to compile vertex shader");
-    let gs = factory.create_shader_geometry(geometry_shader.as_bytes()).expect("Failed to compile geometry shader");
-    let fs = factory.create_shader_pixel(fragment_shader.as_bytes()).expect("Failed to compile fragment shader");
-    let ss = ShaderSet::Geometry(vs, gs, fs);
-
     //let glsl = opengl.to_glsl();
-    let pso = factory.create_pipeline_state(
-        &ss,
-        Primitive::PointList,
-        Rasterizer::new_fill(),
-        pipe::new()
-    ).unwrap();
-
     // Store height in alpha channel of RGBA8. Bit weird, but keeping like this
     // because will want to pass through other data as well, and also not clear
     // how to just include a single float - looks like no matter what the
@@ -269,6 +271,15 @@ fn main() {
     );
 
     window.set_capture_cursor(true);
+    let ss = create_shader_set(factory);
+
+    let mut pso = factory.create_pipeline_state(
+        &ss,
+        Primitive::PointList,
+        Rasterizer::new_fill(),
+        pipe::new()
+    ).unwrap();
+
     while let Some(e) = window.next() {
         first_person.event(&e);
 
@@ -276,6 +287,15 @@ fn main() {
             println!("{}", frame_count);
             frame_count = 0;
             frame_start = Instant::now();
+
+            let ss = create_shader_set(factory);
+
+            pso = factory.create_pipeline_state(
+                &ss,
+                Primitive::PointList,
+                Rasterizer::new_fill(),
+                pipe::new()
+            ).unwrap();
         }
         frame_count += 1;
         if t < 255 {
