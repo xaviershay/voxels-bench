@@ -259,11 +259,11 @@ fn main() {
     let model = vecmath::mat4_id();
     let mut projection = get_projection(&window);
     let mut first_person = FirstPerson::new(
-        [-0.5, 1.5, 6.0],
+        [-0.5, 1.5, 4.0],
         FirstPersonSettings::keyboard_wasd()
     );
 
-    window.set_capture_cursor(true);
+    //window.set_capture_cursor(true);
     let ss = create_shader_set(factory);
 
     let mut pso = factory.create_pipeline_state(
