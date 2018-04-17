@@ -19,6 +19,7 @@ use gfx::traits::*;
 use gfx::{Primitive,ShaderSet};
 use gfx::state::Rasterizer;
 use gfx::Slice;
+use gfx::shade::core::CreateShaderError;
 use camera_controllers::{
     FirstPersonSettings,
     FirstPerson,
@@ -65,18 +66,18 @@ impl Vertex {
     }
 }
 
-fn create_shader_set<R: gfx::Resources, D: Factory<R>>(factory: &mut D) -> ShaderSet<R> {
+fn create_shader_set<R: gfx::Resources, D: Factory<R>>(factory: &mut D) -> Result<ShaderSet<R>, CreateShaderError> {
     let cwd = std::env::current_dir().unwrap();
 
     let vertex_shader = fs::read(cwd.join("assets/voxels.glslv")).unwrap();
     let geometry_shader = fs::read(cwd.join("assets/voxels.glslg")).unwrap();
     let fragment_shader = fs::read(cwd.join("assets/voxels.glslf")).unwrap();
 
-    let vs = factory.create_shader_vertex(&vertex_shader).expect("Failed to compile vertex shader");
-    let gs = factory.create_shader_geometry(&geometry_shader).expect("Failed to compile geometry shader");
-    let fs = factory.create_shader_pixel(&fragment_shader).expect("Failed to compile fragment shader");
+    let vs = factory.create_shader_vertex(&vertex_shader)?;
+    let gs = factory.create_shader_geometry(&geometry_shader)?;
+    let fs = factory.create_shader_pixel(&fragment_shader)?;
 
-    ShaderSet::Geometry(vs, gs, fs)
+    Ok(ShaderSet::Geometry(vs, gs, fs))
 }
 fn main() {
 
@@ -264,7 +265,7 @@ fn main() {
     );
 
     //window.set_capture_cursor(true);
-    let ss = create_shader_set(factory);
+    let ss = create_shader_set(factory).unwrap();
 
     let mut pso = factory.create_pipeline_state(
         &ss,
@@ -281,14 +282,18 @@ fn main() {
             frame_count = 0;
             frame_start = Instant::now();
 
-            let ss = create_shader_set(factory);
-
-            pso = factory.create_pipeline_state(
-                &ss,
-                Primitive::PointList,
-                Rasterizer::new_fill(),
-                pipe::new()
-            ).unwrap();
+            match create_shader_set(factory) {
+                Ok(ss) =>
+                    pso = factory.create_pipeline_state(
+                        &ss,
+                        Primitive::PointList,
+                        Rasterizer::new_fill(),
+                        pipe::new()
+                    ).unwrap(),
+                Err(e) => {
+                    println!("Shaders did not compile: {:?}", e);
+                }
+            }
         }
         frame_count += 1;
         if t < 255 {
