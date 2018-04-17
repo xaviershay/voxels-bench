@@ -8,8 +8,7 @@ extern crate shader_version;
 extern crate vecmath;
 extern crate camera_controllers;
 
-use std::mem::size_of;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 use std::sync::{Arc,RwLock,mpsc};
 use std::thread;
 use std::fs;
@@ -17,15 +16,9 @@ use rand::{Rng,thread_rng};
 
 use piston_window::*;
 use gfx::traits::*;
-use shader_version::Shaders;
-use shader_version::glsl::GLSL;
 use gfx::{Primitive,ShaderSet};
 use gfx::state::Rasterizer;
-use gfx::texture::PackedColor;
-use gfx::buffer::Role;
-use gfx::memory::Bind;
 use gfx::Slice;
-use gfx::Device;
 use camera_controllers::{
     FirstPersonSettings,
     FirstPerson,
@@ -133,7 +126,7 @@ fn main() {
         gfx::texture::Mipmap::Provided,
 &[&texels]).unwrap();
 
-    let mut sinfo = gfx::texture::SamplerInfo::new(
+    let sinfo = gfx::texture::SamplerInfo::new(
         gfx::texture::FilterMethod::Scale,
         gfx::texture::WrapMode::Clamp);
     //sinfo.border = PackedColor::from([0.0, 0.0, 0.0, 0.5]);
@@ -283,7 +276,7 @@ fn main() {
     while let Some(e) = window.next() {
         first_person.event(&e);
 
-        if (frame_start.elapsed().as_secs() >= 1) {
+        if frame_start.elapsed().as_secs() >= 1 {
             println!("{}", frame_count);
             frame_count = 0;
             frame_start = Instant::now();

@@ -12,9 +12,11 @@ impl V3I {
     pub fn create(x: i32, y: i32, z: i32) -> Self {
         V3I { x: x, y: y, z: z }
     }
+    /*
     pub fn zero() -> Self {
         V3I::create(0, 0, 0)
     }
+    */
 }
 
 impl Add for V3I {
