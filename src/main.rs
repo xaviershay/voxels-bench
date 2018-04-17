@@ -69,7 +69,7 @@ fn main() {
         model_view_projection
     };
 
-    let world = V3I { x: 3, y: 1, z: 3};
+    let world = V3I { x: 3, y: 2, z: 3};
     let wx = world.x;
     let wy = world.y;
     let wz = world.z;
@@ -97,7 +97,7 @@ fn main() {
     let ref mut factory = window.factory.clone();
     let mut vertex_data = vec![Vertex::new([0,0,0], [0,0]); locations.len()];
     for l in &locations {
-        vertex_data.push(Vertex::new([l.x as i8,l.z as i8,l.y as i8], [0,0]));
+        vertex_data.push(Vertex::new([l.x as i8,l.y as i8,l.z as i8], [0,0]));
     }
 
     let vbuf = factory.create_vertex_buffer(&vertex_data);
@@ -127,7 +127,7 @@ fn main() {
     let texels = vec![ [0x00, 0x00, 0x00, 0x11]; locations.len()];
 
     let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
-        gfx::texture::Kind::D3(wx as u16, wz as u16, wy as u16),
+        gfx::texture::Kind::D3(wx as u16, wy as u16, wz as u16),
         gfx::texture::Mipmap::Provided,
 &[&texels]).unwrap();
 
@@ -253,29 +253,6 @@ fn main() {
         }
     });
 
-/*
-    loop {
-        thread::sleep(Duration::from_millis(300));
-        let d = data.read().unwrap();
-        print!("{}[2J", 27 as char);
-        for x in 0..wx {
-            for z in 0..wz {
-                let location = V3I::create(x, wy-1, z);
-
-                print!("{: >6.2} ", d.get_unsafe(location).volume);
-            }
-            println!("");
-        }
-        println!("");
-        println!("(Only showing top layer)");
-        println!("");
-        println!("Grid size: {:?}x{:?}x{:?}", wx, wy, wz);
-        println!("Grid mem size: {:?} Mb",
-             (size_of::<Cell>() as i32 * wx * wy * wz) as f32 / 1000.0 / 1000.0);
-        println!("Physics FPS: {}", d.physics_fps);
-    }
-    */
-
     let get_projection = |w: &PistonWindow| {
         let draw_size = w.window.draw_size();
         CameraPerspective {
@@ -287,7 +264,7 @@ fn main() {
     let model = vecmath::mat4_id();
     let mut projection = get_projection(&window);
     let mut first_person = FirstPerson::new(
-        [0.5, 0.5, 4.0],
+        [-0.5, 1.5, 6.0],
         FirstPersonSettings::keyboard_wasd()
     );
 
