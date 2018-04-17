@@ -3,6 +3,8 @@ extern crate rand;
 extern crate gfx;
 extern crate piston_window;
 extern crate shader_version;
+extern crate vecmath;
+extern crate camera_controllers;
 
 use std::mem::size_of;
 use std::time::{Duration, Instant};
@@ -60,6 +62,12 @@ fn main() {
     use gfx::buffer::Role;
     use gfx::memory::Bind;
     use gfx::Slice;
+    use camera_controllers::{
+        FirstPersonSettings,
+        FirstPerson,
+        CameraPerspective,
+        model_view_projection
+    };
 
     let world = V3I { x: 3, y: 1, z: 3};
     let wx = world.x;
@@ -138,6 +146,7 @@ fn main() {
 
     uniform sampler3D t_data;
     uniform ivec3 world_size;
+    uniform mat4 u_model_view_proj;
 
     void main() {
         vec4 pos = gl_in[0].gl_Position;
@@ -151,19 +160,19 @@ fn main() {
             )
         ).w;
 
-        gl_Position = pos + vec4(-radius, -radius, 0.0, 0.0);
+        gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius, 0.0, 0.0));
         EmitVertex();
 
-        gl_Position = pos + vec4(radius, -radius, 0.0, 0.0);
+        gl_Position = u_model_view_proj * (pos + vec4(radius, -radius, 0.0, 0.0));
         EmitVertex();
 
-        gl_Position = pos + vec4(radius, -radius + (height * 2 * radius), 0.0, 0.0);
+        gl_Position = u_model_view_proj * (pos + vec4(radius, -radius + (height * 2 * radius), 0.0, 0.0));
         EmitVertex();
 
-        gl_Position = pos + vec4(-radius, -radius + (height * 2 * radius), 0.0, 0.0);
+        gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius + (height * 2 * radius), 0.0, 0.0));
         EmitVertex();
 
-        gl_Position = pos + vec4(-radius, -radius, 0.0, 0.0);
+        gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius, 0.0, 0.0));
         EmitVertex();
 
         EndPrimitive();
@@ -346,7 +355,26 @@ fn main() {
         println!("Physics FPS: {}", d.physics_fps);
     }
     */
+
+    let get_projection = |w: &PistonWindow| {
+        let draw_size = w.window.draw_size();
+        CameraPerspective {
+            fov: 90.0, near_clip: 0.1, far_clip: 1000.0,
+            aspect_ratio: (draw_size.width as f32) / (draw_size.height as f32)
+        }.projection()
+    };
+
+    let model = vecmath::mat4_id();
+    let mut projection = get_projection(&window);
+    let mut first_person = FirstPerson::new(
+        [0.5, 0.5, 4.0],
+        FirstPersonSettings::keyboard_wasd()
+    );
+
+    window.set_capture_cursor(true);
     while let Some(e) = window.next() {
+        first_person.event(&e);
+
         if (frame_start.elapsed().as_secs() >= 1) {
             println!("{}", frame_count);
             frame_count = 0;
@@ -376,10 +404,16 @@ fn main() {
             window.encoder.clear(&window.output_color, [0.3, 0.3, 0.3, 1.0]);
             window.encoder.clear_depth(&window.output_stencil, 1.0);
 
+            gfx_data.u_model_view_proj = model_view_projection(
+                model,
+                first_person.camera(args.ext_dt).orthogonal(),
+                projection
+            );
             window.encoder.draw(&slice, &pso, &gfx_data);
         });
 
         if let Some(_) = e.resize_args() {
+            projection = get_projection(&window);
             gfx_data.out_color = window.output_color.clone();
             gfx_data.out_depth = window.output_stencil.clone();
         }

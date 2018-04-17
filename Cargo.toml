@@ -8,5 +8,7 @@ rand = "0.4.2"
 piston_window = "0.77.0"
 gfx = "0.17.1"
 shader_version = "0.3.0"
+camera_controllers = "*"
+vecmath = "*"
 
 # flame = "0.2.2"
