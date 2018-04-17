@@ -1,0 +1,41 @@
+#version 330 core
+layout (points) in;
+layout (line_strip, max_vertices = 5) out;
+
+in VS_OUT {
+    ivec3 a_pos;
+} gs_in[];
+
+uniform sampler3D t_data;
+uniform ivec3 world_size;
+uniform mat4 u_model_view_proj;
+
+void main() {
+    vec4 pos = gl_in[0].gl_Position;
+    ivec3 gridPos = gs_in[0].a_pos;
+    float radius = 0.1;
+    float height = texture(t_data,
+        vec3(
+            gridPos.x / (world_size.x - 1),
+            gridPos.y / (world_size.y - 1),
+            gridPos.z / (world_size.z - 1)
+        )
+    ).w;
+
+    gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius, 0.0, 0.0));
+    EmitVertex();
+
+    gl_Position = u_model_view_proj * (pos + vec4(radius, -radius, 0.0, 0.0));
+    EmitVertex();
+
+    gl_Position = u_model_view_proj * (pos + vec4(radius, -radius + (height * 2 * radius), 0.0, 0.0));
+    EmitVertex();
+
+    gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius + (height * 2 * radius), 0.0, 0.0));
+    EmitVertex();
+
+    gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius, 0.0, 0.0));
+    EmitVertex();
+
+    EndPrimitive();
+}

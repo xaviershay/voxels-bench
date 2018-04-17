@@ -100,93 +100,13 @@ fn main() {
         vertex_data.push(Vertex::new([l.x as i8,l.z as i8,l.y as i8], [0,0]));
     }
 
-/*
-    let vertex_data = vec![
-        Vertex::new([0, 0, 0], [0, 0]),
-        Vertex::new([0, 1, 0], [1, 0]),
-        Vertex::new([1, 1, 0], [1, 1]),
-        Vertex::new([1, 0, 0], [0, 1]),
-        Vertex::new([0, 2, 0], [1, 0]),
-        Vertex::new([1, 2, 0], [1, 1]),
-    ];
-    */
-    /*
-    let vertex_data = vec![
-        Vertex::new([-1, -1, 1], [0, 0]),
-        Vertex::new([1, -1, 1], [1, 0]),
-        Vertex::new([1, 1, 1], [1, 1]),
-        Vertex::new([-1, 1, 1], [0, 1]),
-    ];
-    */
     let vbuf = factory.create_vertex_buffer(&vertex_data);
     let slice = Slice::new_match_vertex_buffer(&vbuf);
 
-    let vertex_shader = r#"
-    #version 330 core
-    layout (location = 0) in ivec3 a_pos;
+    let vertex_shader = include_str!("../assets/voxels.glslv");
+    let geometry_shader = include_str!("../assets/voxels.glslg");
+    let fragment_shader = include_str!("../assets/voxels.glslf");
 
-    out VS_OUT {
-        ivec3 a_pos;
-    } vs_out;
-
-    void main()
-    {
-        gl_Position = vec4(a_pos.x*0.3-0.3, a_pos.y*0.5-0.3, a_pos.z*0.5-0.3, 1.0);
-        vs_out.a_pos = a_pos;
-    }
-    "#;
-    let geometry_shader = r#"
-    #version 330 core
-    layout (points) in;
-    layout (line_strip, max_vertices = 5) out;
-
-    in VS_OUT {
-        ivec3 a_pos;
-    } gs_in[];
-
-    uniform sampler3D t_data;
-    uniform ivec3 world_size;
-    uniform mat4 u_model_view_proj;
-
-    void main() {
-        vec4 pos = gl_in[0].gl_Position;
-        ivec3 gridPos = gs_in[0].a_pos;
-        float radius = 0.1;
-        float height = texture(t_data,
-            vec3(
-                gridPos.x / (world_size.x - 1),
-                gridPos.y / (world_size.y - 1),
-                gridPos.z / (world_size.z - 1)
-            )
-        ).w;
-
-        gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius, 0.0, 0.0));
-        EmitVertex();
-
-        gl_Position = u_model_view_proj * (pos + vec4(radius, -radius, 0.0, 0.0));
-        EmitVertex();
-
-        gl_Position = u_model_view_proj * (pos + vec4(radius, -radius + (height * 2 * radius), 0.0, 0.0));
-        EmitVertex();
-
-        gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius + (height * 2 * radius), 0.0, 0.0));
-        EmitVertex();
-
-        gl_Position = u_model_view_proj * (pos + vec4(-radius, -radius, 0.0, 0.0));
-        EmitVertex();
-
-        EndPrimitive();
-    }
-    "#;
-    let fragment_shader = r#"
-    #version 330 core
-    out vec4 FragColor;
-
-    void main()
-    {
-        FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
-    } 
-    "#;
     let vs = factory.create_shader_vertex(vertex_shader.as_bytes()).expect("Failed to compile vertex shader");
     let gs = factory.create_shader_geometry(geometry_shader.as_bytes()).expect("Failed to compile geometry shader");
     let fs = factory.create_shader_pixel(fragment_shader.as_bytes()).expect("Failed to compile fragment shader");
