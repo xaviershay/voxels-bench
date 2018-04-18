@@ -160,7 +160,12 @@ fn main() {
                     1.0
                 } else {
                     0.0
-                }
+                };
+                c.cell_type = if a > 0.8 {
+                    1
+                } else {
+                    0
+                };
             });
         }
 
@@ -179,7 +184,7 @@ fn main() {
                     })
                 })
         }).collect::<Vec<_>>();
-        let max_flow_per_sec = 0.2;
+        let max_flow_per_sec = 2.0;
         let mut delta_time = 0.0;
 
         loop {
@@ -205,19 +210,22 @@ fn main() {
 
                 for &location in locations.iter() {
                     let cell = old_data.get_unsafe(location);
+                    if cell.cell_type != 0 {
+                        continue;
+                    }
+
                     let mut remaining = cell.volume;
 
                     let down = V3I { x: 0, y: -1, z: 0 };
                     let nl = location + down;
 
-                    match old_data.get(nl) {
-                        Some(neighbour) => {
+                    for neighbour in old_data.get(nl) {
+                        if neighbour.cell_type == 0 {
                             let flow = (1.0 - neighbour.volume).min(cell.volume).min(max_flow).max(0.0);
 
                             new_data.update(nl, |current| current.volume += flow);
                             remaining -= flow;
-                        },
-                        None => {}
+                        }
                     }
 
                     if remaining > 0.0 {
@@ -228,8 +236,10 @@ fn main() {
                             let nl = location + *delta;
 
                             for n in old_data.get(nl) {
-                                sum += n.volume;
-                                total += 1.0;
+                                if n.cell_type == 0 {
+                                    sum += n.volume;
+                                    total += 1.0;
+                                }
                             }
                         }
 
@@ -298,7 +308,8 @@ fn main() {
         let d = data.read().unwrap();
         let mut texels2 = Vec::with_capacity(locations.len());
         for location in &locations {
-            texels2.push([0, 0, 0, (d.get_unsafe(*location).volume * 255.0) as u8]);
+            let cell = d.get_unsafe(*location);
+            texels2.push([0, 0, (cell.cell_type * 255) as u8, (cell.volume * 255.0) as u8]);
         }
 
         if frame_start.elapsed().as_secs() >= 1 {
@@ -350,7 +361,7 @@ fn main() {
         window.draw_3d(&e, |window| {
             let args = e.render_args().unwrap();
 
-            window.encoder.clear(&window.output_color, [0.1, 0.1, 0.1, 1.0]);
+            window.encoder.clear(&window.output_color, [0.05, 0.05, 0.05, 1.0]);
             window.encoder.clear_depth(&window.output_stencil, 1.0);
 
             gfx_data.u_model_view_proj = model_view_projection(
