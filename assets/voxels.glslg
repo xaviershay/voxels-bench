@@ -3,13 +3,17 @@ layout (points) in;
 layout (triangle_strip, max_vertices = 24) out;
 
 in VS_OUT {
-    ivec3 a_pos;
+    ivec3 grid_pos;
 } gs_in[];
+
+out vec4 vertexColor;
 
 uniform sampler3D t_data;
 uniform ivec3 world_size;
 uniform mat4 u_model_view_proj;
 
+const vec4 darkBlue = vec4(12/255.0, 56/255.0, 127 /255.0, 1.0);
+const vec4 lightBlue = vec4(198 / 255.0, 220 / 255.0, 1.0, 1.0);
 
 vec4 cubeVerts[8] = vec4[8](
     vec4(-0.5, -0.5, -0.5,1), // FLB   0
@@ -22,9 +26,23 @@ vec4 cubeVerts[8] = vec4[8](
     vec4(0.5, 0.5, 0.5,1)     // BRT   7
 );
 
+vec4 cell(ivec3 pos) {
+    if (pos.y >= world_size.y) {
+        return vec4(0.0, 0.0, 0.0, 0.0);
+    } else {
+        return texture(t_data,
+            vec3(
+                pos.x / (world_size.x - 1),
+                pos.y / (world_size.y - 1),
+                pos.z / (world_size.z - 1)
+            )
+        );
+    }
+}
+
 void emitQuad(int a, int b, int c, int d) {
     vec4 pos = gl_in[0].gl_Position;
-    float scale = 0.9;
+    float scale = 1.0;
 
     gl_Position = u_model_view_proj * (pos + cubeVerts[a] * scale);
     EmitVertex();
@@ -40,27 +58,33 @@ void emitQuad(int a, int b, int c, int d) {
 
     EndPrimitive();
 }
+
 void main() {
     vec4 pos = gl_in[0].gl_Position;
-    ivec3 gridPos = gs_in[0].a_pos;
+    ivec3 gridPos = gs_in[0].grid_pos;
     float radius = 0.4;
-    float height = texture(t_data,
-        vec3(
-            gridPos.x / (world_size.x - 1),
-            gridPos.y / (world_size.y - 1),
-            gridPos.z / (world_size.z - 1)
-        )
-    ).w;
+    float height = cell(gridPos).w;
+    float above = cell(ivec3(gridPos.x, gridPos.y + 1, gridPos.z)).w;
 
-    cubeVerts[1].y = height - 0.5;
-    cubeVerts[3].y = height - 0.5;
-    cubeVerts[5].y = height - 0.5;
-    cubeVerts[7].y = height - 0.5;
+    if (above > 0.0) {
+        height = 1.0;
+        vertexColor = mix(lightBlue, darkBlue, height);
+    } else {
+        vertexColor = darkBlue;
+    }
 
-    emitQuad(0, 2, 4, 6); // Bottom quad
-    emitQuad(0, 1, 2, 3); // Front quad
-    emitQuad(4, 5, 6, 7); // Back
-    emitQuad(1, 3, 5, 7); // Top
-    emitQuad(0, 1, 4, 5); // Left
-    emitQuad(2, 3, 6, 7); // Right
+    if (height > 0.001) {
+
+        cubeVerts[1].y = height - 0.5;
+        cubeVerts[3].y = height - 0.5;
+        cubeVerts[5].y = height - 0.5;
+        cubeVerts[7].y = height - 0.5;
+
+        emitQuad(0, 2, 4, 6); // Bottom quad
+        emitQuad(0, 1, 2, 3); // Front quad
+        emitQuad(4, 5, 6, 7); // Back
+        emitQuad(1, 3, 5, 7); // Top
+        emitQuad(0, 1, 4, 5); // Left
+        emitQuad(2, 3, 6, 7); // Right
+    }
 }

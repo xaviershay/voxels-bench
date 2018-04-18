@@ -81,16 +81,17 @@ fn create_shader_set<R: gfx::Resources, D: Factory<R>>(factory: &mut D) -> Resul
 }
 fn main() {
 
-    let world = V3I { x: 3, y: 2, z: 3};
+    let world = V3I { x: 5, y: 3, z: 5};
+    //let world = V3I { x: 3, y: 2, z: 5};
     let wx = world.x;
     let wy = world.y;
     let wz = world.z;
     let data = Arc::new(RwLock::new(World::create(world)));
 
     let locations =
-        (0..wx).flat_map(|x| {
+        (0..wz).flat_map(|z| {
             (0..wy).flat_map(move |y| {
-                (0..wz).map (move |z| {
+                (0..wx).map (move |x| {
                     V3I::create(x, y, z)
                 })
             })
@@ -107,9 +108,9 @@ fn main() {
         .unwrap();
 
     let ref mut factory = window.factory.clone();
-    let mut vertex_data = vec![Vertex::new([0,0,0], [0,0]); locations.len()];
+    let mut vertex_data = Vec::with_capacity(locations.len());
     for l in &locations {
-        vertex_data.push(Vertex::new([l.x as i8,l.y as i8,l.z as i8], [0,0]));
+        vertex_data.push(Vertex::new([l.x as i8, l.y as i8, l.z as i8], [0,0]));
     }
 
     let vbuf = factory.create_vertex_buffer(&vertex_data);
@@ -137,7 +138,7 @@ fn main() {
             vbuf: vbuf.clone(),
             u_model_view_proj: [[0.0; 4]; 4],
             t_data: (texture_view, sampler),
-            world_size: [wx, wz, wy],
+            world_size: [wx, wy, wz],
             out_color: window.output_color.clone(),
             out_depth: window.output_stencil.clone(),
     };
@@ -155,13 +156,16 @@ fn main() {
         for &location in locations.iter() {
             value.update(location, |c| {
                 let a: f32 = rng.gen();
-                c.volume = if a < 0.5 {
+                c.volume = if a < 0.1 {
                     1.0
                 } else {
                     0.0
                 }
             });
         }
+
+        value.update(V3I::create(0, 0, 0), |c| c.volume = 0.8);
+        value.update(V3I::create(0, 1, 0), |c| c.volume = 0.1);
     }
 
     let physics_data = Arc::clone(&data);
@@ -175,7 +179,7 @@ fn main() {
                     })
                 })
         }).collect::<Vec<_>>();
-        let max_flow_per_sec = 1.0;
+        let max_flow_per_sec = 0.2;
         let mut delta_time = 0.0;
 
         loop {
@@ -201,36 +205,50 @@ fn main() {
 
                 for &location in locations.iter() {
                     let cell = old_data.get_unsafe(location);
-
-                    let mut sum = cell.volume;
-                    let mut total = 1.0;
-
-                    for delta in H_NEIGHBOURS.iter() {
-                        let nl = location + *delta;
-
-                        for n in old_data.get(nl) {
-                            sum += n.volume;
-                            total += 1.0;
-                        }
-                    }
-
-                    let target_volume = sum / total;
-
                     let mut remaining = cell.volume;
 
-                    // Doing a second loop here, with the "double fetching" of (nl, n) is actually
-                    // faster than precomputing. Probably because pre-computing ends up allocating
-                    // extra memory [citation needed]. Given that H_NEIGHBOURS is a fixed-size
-                    // array, there's likely a way to make it work without extra allocations...
-                    for delta in H_NEIGHBOURS.iter() {
-                        let nl = location + *delta;
+                    let down = V3I { x: 0, y: -1, z: 0 };
+                    let nl = location + down;
 
-                        for n in old_data.get(nl) {
-                            let flow = (target_volume - n.volume).max(0.0).min(remaining).min(max_flow);
+                    match old_data.get(nl) {
+                        Some(neighbour) => {
+                            let flow = (1.0 - neighbour.volume).min(cell.volume).min(max_flow).max(0.0);
 
                             new_data.update(nl, |current| current.volume += flow);
-
                             remaining -= flow;
+                        },
+                        None => {}
+                    }
+
+                    if remaining > 0.0 {
+                        let mut sum = remaining;
+                        let mut total = 1.0;
+
+                        for delta in H_NEIGHBOURS.iter() {
+                            let nl = location + *delta;
+
+                            for n in old_data.get(nl) {
+                                sum += n.volume;
+                                total += 1.0;
+                            }
+                        }
+
+                        let target_volume = sum / total;
+
+                        // Doing a second loop here, with the "double fetching" of (nl, n) is actually
+                        // faster than precomputing. Probably because pre-computing ends up allocating
+                        // extra memory [citation needed]. Given that H_NEIGHBOURS is a fixed-size
+                        // array, there's likely a way to make it work without extra allocations...
+                        for delta in H_NEIGHBOURS.iter() {
+                            let nl = location + *delta;
+
+                            for n in old_data.get(nl) {
+                                let flow = (target_volume - n.volume).max(0.0).min(remaining).min(max_flow);
+
+                                new_data.update(nl, |current| current.volume += flow);
+
+                                remaining -= flow;
+                            }
                         }
                     }
                     new_data.update(location, |current| current.volume += remaining - cell.volume);
@@ -277,10 +295,30 @@ fn main() {
     while let Some(e) = window.next() {
         first_person.event(&e);
 
+        let d = data.read().unwrap();
+        let mut texels2 = Vec::with_capacity(locations.len());
+        for location in &locations {
+            texels2.push([0, 0, 0, (d.get_unsafe(*location).volume * 255.0) as u8]);
+        }
+
         if frame_start.elapsed().as_secs() >= 1 {
             println!("{}", frame_count);
             frame_count = 0;
             frame_start = Instant::now();
+
+            /*
+            println!("");
+            for y in 0..wy {
+                for z in 0..wz {
+                    for x in 0..wx {
+                        let cell = d.get_unsafe(V3I::create(x, y, z));
+
+                        print!("{:.2} ", cell.volume);
+                    }
+                    println!("");
+                }
+            }
+            */
 
             match create_shader_set(factory) {
                 Ok(ss) =>
@@ -301,22 +339,18 @@ fn main() {
         } else {
             t = 0;
         }
-        let mut texels2 = Vec::with_capacity(locations.len());
-        let d = data.read().unwrap();
-        for location in &locations {
-            texels2.push([0, 0, 0, (d.get_unsafe(*location).volume * 255.0) as u8]);
-        }
         let sampler = factory.create_sampler(sinfo);
         // TODO: What about a mutable texture? Is that a thing?
         let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
-            gfx::texture::Kind::D3(wx as u16, wz as u16, wy as u16),
+            gfx::texture::Kind::D3(wx as u16, wy as u16, wz as u16),
             gfx::texture::Mipmap::Provided,
             &[&texels2]).unwrap();
         gfx_data.t_data = (texture_view, sampler);
+
         window.draw_3d(&e, |window| {
             let args = e.render_args().unwrap();
 
-            window.encoder.clear(&window.output_color, [0.3, 0.3, 0.3, 1.0]);
+            window.encoder.clear(&window.output_color, [0.1, 0.1, 0.1, 1.0]);
             window.encoder.clear_depth(&window.output_stencil, 1.0);
 
             gfx_data.u_model_view_proj = model_view_projection(
