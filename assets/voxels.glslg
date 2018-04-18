@@ -33,9 +33,9 @@ vec4 cell(ivec3 pos) {
     } else {
         return texture(t_data,
             vec3(
-                pos.x / (world_size.x - 1),
-                pos.y / (world_size.y - 1),
-                pos.z / (world_size.z - 1)
+                float(pos.x) / (world_size.x - 1),
+                float(pos.y) / (world_size.y - 1),
+                float(pos.z) / (world_size.z - 1)
             )
         );
     }
@@ -43,7 +43,7 @@ vec4 cell(ivec3 pos) {
 
 void emitQuad(int a, int b, int c, int d) {
     vec4 pos = gl_in[0].gl_Position;
-    float scale = 1.0;
+    float scale = 0.6;
 
     gl_Position = u_model_view_proj * (pos + cubeVerts[a] * scale);
     EmitVertex();

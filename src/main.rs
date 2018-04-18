@@ -80,9 +80,8 @@ fn create_shader_set<R: gfx::Resources, D: Factory<R>>(factory: &mut D) -> Resul
     Ok(ShaderSet::Geometry(vs, gs, fs))
 }
 fn main() {
-
-    let world = V3I { x: 10, y: 4, z: 10};
-    //let world = V3I { x: 3, y: 2, z: 5};
+    //let world = V3I { x: 10, y: 4, z: 10};
+    let world = V3I { x: 20, y: 5, z: 20};
     let wx = world.x;
     let wy = world.y;
     let wz = world.z;
@@ -121,7 +120,7 @@ fn main() {
     // because will want to pass through other data as well, and also not clear
     // how to just include a single float - looks like no matter what the
     // geometry shader is going to want to interpret as RGBA.
-    let texels = vec![ [0x00, 0x00, 0x00, 0x11]; locations.len()];
+    let texels = vec![ [0x00, 0x00, 0xff, 0x11]; locations.len()];
 
     let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
         gfx::texture::Kind::D3(wx as u16, wy as u16, wz as u16),
@@ -143,7 +142,6 @@ fn main() {
             out_depth: window.output_stencil.clone(),
     };
 
-    let mut t: u8 = 0;
     let mut frame_count = 0;
     let mut frame_start = Instant::now();
     //let world = V3I { x: 100, y: 100, z: 100};
@@ -154,23 +152,16 @@ fn main() {
         let mut rng = thread_rng();
 
         for &location in locations.iter() {
+            let a: f32 = rng.gen();
+            println!("{}", a);
             value.update(location, |c| {
-                let a: f32 = rng.gen();
-                c.volume = if a < 0.1 {
-                    1.0
-                } else {
-                    0.0
-                };
-                c.cell_type = if a > 0.8 {
-                    1
-                } else {
-                    0
-                };
+                if a < 0.4 {
+                    c.cell_type = 1;
+                } else if a < 0.7 {
+                    c.volume = 1.0;
+                }
             });
         }
-
-        value.update(V3I::create(0, 0, 0), |c| c.volume = 0.8);
-        value.update(V3I::create(0, 1, 0), |c| c.volume = 0.1);
     }
 
     let physics_data = Arc::clone(&data);
@@ -312,24 +303,22 @@ fn main() {
             texels2.push([0, 0, (cell.cell_type * 255) as u8, (cell.volume * 255.0) as u8]);
         }
 
-        if frame_start.elapsed().as_secs() >= 1 {
-            println!("{}", frame_count);
+        if frame_start.elapsed().as_secs() >= 5 {
+            println!("Gfx: {}, Phyx: {}", frame_count, d.physics_fps);
             frame_count = 0;
             frame_start = Instant::now();
 
-            /*
             println!("");
             for y in 0..wy {
                 for z in 0..wz {
                     for x in 0..wx {
                         let cell = d.get_unsafe(V3I::create(x, y, z));
 
-                        print!("{:.2} ", cell.volume);
+                        print!("{:.2} ", cell.cell_type);
                     }
                     println!("");
                 }
             }
-            */
 
             match create_shader_set(factory) {
                 Ok(ss) =>
@@ -345,11 +334,7 @@ fn main() {
             }
         }
         frame_count += 1;
-        if t < 255 {
-            t += 1;    
-        } else {
-            t = 0;
-        }
+
         let sampler = factory.create_sampler(sinfo);
         // TODO: What about a mutable texture? Is that a thing?
         let (_, texture_view) = factory.create_texture_immutable::<gfx::format::Rgba8>(
