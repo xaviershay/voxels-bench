@@ -21,8 +21,8 @@ use gfx::state::Rasterizer;
 use gfx::Slice;
 use gfx::shade::core::CreateShaderError;
 use camera_controllers::{
-    FirstPersonSettings,
-    FirstPerson,
+    OrbitZoomCamera,
+    OrbitZoomCameraSettings,
     CameraPerspective,
     model_view_projection
 };
@@ -81,7 +81,7 @@ fn create_shader_set<R: gfx::Resources, D: Factory<R>>(factory: &mut D) -> Resul
 }
 fn main() {
 
-    let world = V3I { x: 5, y: 3, z: 5};
+    let world = V3I { x: 10, y: 4, z: 10};
     //let world = V3I { x: 3, y: 2, z: 5};
     let wx = world.x;
     let wy = world.y;
@@ -287,9 +287,9 @@ fn main() {
 
     let model = vecmath::mat4_id();
     let mut projection = get_projection(&window);
-    let mut first_person = FirstPerson::new(
-        [-0.5, 1.5, 4.0],
-        FirstPersonSettings::keyboard_wasd()
+    let mut camera = OrbitZoomCamera::new(
+        [wx as f32 / 2.0, wy as f32 / 2.0, wz as f32 / 2.0],
+        OrbitZoomCameraSettings::default()
     );
 
     //window.set_capture_cursor(true);
@@ -303,7 +303,7 @@ fn main() {
     ).unwrap();
 
     while let Some(e) = window.next() {
-        first_person.event(&e);
+        camera.event(&e);
 
         let d = data.read().unwrap();
         let mut texels2 = Vec::with_capacity(locations.len());
@@ -366,7 +366,7 @@ fn main() {
 
             gfx_data.u_model_view_proj = model_view_projection(
                 model,
-                first_person.camera(args.ext_dt).orthogonal(),
+                camera.camera(args.ext_dt).orthogonal(),
                 projection
             );
             window.encoder.draw(&slice, &pso, &gfx_data);
