@@ -43,7 +43,7 @@ vec4 cell(ivec3 pos) {
 
 void emitQuad(int a, int b, int c, int d) {
     vec4 pos = gl_in[0].gl_Position;
-    float scale = 0.6;
+    float scale = 1.0; 
 
     gl_Position = u_model_view_proj * (pos + cubeVerts[a] * scale);
     EmitVertex();

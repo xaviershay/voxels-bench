@@ -7,6 +7,7 @@ extern crate piston_window;
 extern crate shader_version;
 extern crate vecmath;
 extern crate camera_controllers;
+extern crate noise;
 
 use std::time::{Instant};
 use std::sync::{Arc,RwLock,mpsc};
@@ -26,6 +27,7 @@ use camera_controllers::{
     CameraPerspective,
     model_view_projection
 };
+use noise::{NoiseFn, Perlin};
 
 mod types;
 
@@ -150,14 +152,16 @@ fn main() {
     {
         let mut value = data.write().unwrap();
         let mut rng = thread_rng();
+        let noise = Perlin::new();
 
         for &location in locations.iter() {
             let a: f32 = rng.gen();
-            println!("{}", a);
+            let seed: f64 = rng.gen();
+            let height: f64 = (noise.get([(seed + location.x as f64) / (wx - 1) as f64, (seed + location.z as f64) / (wz - 1) as f64]) + 1.0) * 0.5 * (wy as f64); // Height map
             value.update(location, |c| {
-                if a < 0.4 {
-                    c.cell_type = 1;
-                } else if a < 0.7 {
+                if location.y < height as i32 {
+                    c.cell_type = 1
+                } else if a < 0.1 {
                     c.volume = 1.0;
                 }
             });
@@ -308,6 +312,7 @@ fn main() {
             frame_count = 0;
             frame_start = Instant::now();
 
+/*
             println!("");
             for y in 0..wy {
                 for z in 0..wz {
@@ -319,6 +324,7 @@ fn main() {
                     println!("");
                 }
             }
+            */
 
             match create_shader_set(factory) {
                 Ok(ss) =>
